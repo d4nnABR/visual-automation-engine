@@ -8,11 +8,14 @@ automation_images/debug/*
 !automation_images/debug/.gitkeep
 
 
+
+
 # Python
 __pycache__/
 *.pyc
 *.py[cod]
 *.pyo
+*_personal.txt
 .env
 venv/
 .venv/

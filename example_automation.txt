@@ -1,0 +1,48 @@
+# ============================================================
+# EJEMPLO DE ARCHIVO DE AUTOMATIZACIÓN
+# Visual Automation Engine - d4nnABR
+# ============================================================
+# Formato de línea:
+#   ACCIÓN,X,Y,RETRASO,CARGA_ÚTIL
+#
+# Las líneas que empiezan con # son comentarios y se ignoran.
+# ============================================================
+
+# --- Abrir una aplicación con hotkey ---
+HOTKEY,0,0,1.5,win+r
+
+# --- Escribir texto en un campo ---
+TYPE,960,540,1.0,mi_aplicacion.exe
+
+# --- Presionar Enter para confirmar ---
+PRESS,0,0,1.0,enter
+
+# --- Click en un botón específico ---
+CLICK,450,300,2.0
+
+# --- Escribir en un campo sin click previo ---
+TYPE_RAW,0,0,1.0,Texto de ejemplo
+
+# --- Esperar a que aparezca una imagen en pantalla ---
+WAIT_FOR_IMAGE,0,0,30,boton_aceptar.png
+
+# --- Click cuando aparezca una imagen específica ---
+CLICK_WHEN_IMAGE,500,400,2.0,icono_formulario.png
+
+# --- Manejo de errores: si falla ir a RECUPERACION ---
+ON_FAIL_GOTO,0,0,0,RECUPERACION
+
+# --- Click normal con coordenadas ---
+CLICK,800,450,1.5
+
+# --- Saltar directamente a una etiqueta ---
+GOTO,0,0,0,FIN
+
+# --- Etiqueta de recuperación ante fallos ---
+LABEL,0,0,0,RECUPERACION
+TYPE_RAW,0,0,1.0,Recuperando proceso...
+PRESS,0,0,1.0,esc
+
+# --- Etiqueta de fin de flujo ---
+LABEL,0,0,0,FIN
+HOTKEY,0,0,1.0,alt+f4
