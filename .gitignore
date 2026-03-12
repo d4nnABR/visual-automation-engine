@@ -1,12 +1,12 @@
 # Configuración personal del usuario (contiene rutas locales)
 config_usuario.json
 
-# Imágenes de automatización (son específicas de cada PC)
-automation_images/
+automation_images/*
+!automation_images/.gitkeep
+!automation_images/debug/
+automation_images/debug/*
+!automation_images/debug/.gitkeep
 
-# Logs de ejecución
-*.log
-debug/
 
 # Python
 __pycache__/
