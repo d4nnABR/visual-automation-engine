@@ -1,0 +1,18 @@
+# Configuración personal del usuario (contiene rutas locales)
+config_usuario.json
+
+# Imágenes de automatización (son específicas de cada PC)
+automation_images/
+
+# Logs de ejecución
+*.log
+debug/
+
+# Python
+__pycache__/
+*.pyc
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
