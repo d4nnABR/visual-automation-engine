@@ -1,7 +1,10 @@
+
+
 # Visual Automation Engine 🤖
 
-A modular Python-based visual automation engine that executes screen actions using coordinate mapping, image recognition, and robust error-handling logic.
+A modular Python-based visual automation engine primarily designed to support a Power Apps-driven application, enabling automated screen interactions through coordinate mapping, image recognition, and resilient error-handling workflows.
 
+Although its main use case is within a solution built on Power Apps, the repository is not limited to that ecosystem and can also be executed or adapted for use with other programs and desktop environments thanks to its flexible visual automation architecture.
 ---
 
 ## Features
