@@ -7,11 +7,16 @@ from datetime import datetime, timedelta
 from config import (
     cargar_directorio_base, guardar_directorio_base,
     get_directorio_imagenes, get_directorio_debug,
-    ACCIONES_VALIDAS,
+    get_directorio_anchors, get_directorio_obstrucciones,
+    AUTO_GUARD, ACCIONES_VALIDAS,
 )
-from utils import obtener_marca_tiempo, antirrebote, parse_retraso_y_hora_siguiente, crear_directorios
+from utils import (
+    obtener_marca_tiempo, antirrebote, parse_retraso_y_hora_siguiente,
+    crear_directorios, mantener_pc_despierto, esta_bloqueado,
+)
 from logger import Logger
 from vision import seleccionar_region, capturar_imagen_referencia
+from vision_ui import cerrar_obstrucciones
 from acciones import ejecutar_accion, grabar_eventos_teclas_hasta_f12, FALLO, EXITO
 
 ACCIONES_FLUJO = {"LABEL", "GOTO", "RETRY", "ON_FAIL_GOTO"}
@@ -23,7 +28,31 @@ class AutomatizacionVisual:
         self.directorio_imagenes = get_directorio_imagenes(self.directorio_base)
         self.directorio_debug    = get_directorio_debug(self.directorio_base)
         crear_directorios(self.directorio_imagenes, self.directorio_debug)
+        self._crear_subdirectorios()
         self.logger = Logger(self.directorio_debug)
+
+    def _esperar_desbloqueo(self):
+        """No envía entrada si la estación está bloqueada (evita teclear en la
+        pantalla de bloqueo). Espera hasta que se desbloquee o el usuario cancele."""
+        estado = esta_bloqueado()
+        if not estado:
+            return
+        self.logger.registrar(
+            "ESTACIÓN BLOQUEADA: no se envía entrada; esperando desbloqueo...", "WARNING"
+        )
+        while esta_bloqueado():
+            if keyboard.is_pressed("esc"):
+                antirrebote("esc")
+                raise KeyboardInterrupt("Cancelado por usuario (bloqueada)")
+            time.sleep(2)
+        self.logger.registrar("Estación desbloqueada; continuando")
+
+    def _crear_subdirectorios(self):
+        for sub in (
+            get_directorio_anchors(self.directorio_imagenes),
+            get_directorio_obstrucciones(self.directorio_imagenes),
+        ):
+            os.makedirs(sub, exist_ok=True)
 
     # ──────────────────────────────────────────────
     # DIRECTORIO BASE DINÁMICO
@@ -51,6 +80,7 @@ class AutomatizacionVisual:
         self.directorio_debug    = get_directorio_debug(nueva_ruta)
         guardar_directorio_base(nueva_ruta)
         crear_directorios(self.directorio_imagenes, self.directorio_debug)
+        self._crear_subdirectorios()
         self.logger = Logger(self.directorio_debug)
         print(f"Directorio base actualizado y guardado: {nueva_ruta}")
 
@@ -158,6 +188,36 @@ class AutomatizacionVisual:
                             archivo.write(f"CLICK_RANDOM_YELLOW,{region[0]},{region[1]},{retraso},{region[2]}|{region[3]}\n")
                             print(f"CLICK_RANDOM_YELLOW guardado con región: {region}")
 
+                    elif keyboard.is_pressed("g"):
+                        antirrebote("g")
+                        nombre_ancla = input(f"Nombre del ancla a clickear (default: anchor_{contador_pasos}): ") or f"anchor_{contador_pasos}"
+                        ruta_ancla = capturar_imagen_referencia(nombre_ancla, get_directorio_anchors(self.directorio_imagenes))
+                        retraso = input("Introduce el tiempo de espera (en segundos): ")
+                        archivo.write(f"CLICK_ANCHOR,0,0,{retraso},{os.path.basename(ruta_ancla)}\n")
+                        print(f"CLICK_ANCHOR guardado: {os.path.basename(ruta_ancla)}")
+                        contador_pasos += 1
+
+                    elif keyboard.is_pressed("e"):
+                        antirrebote("e")
+                        nombre_ancla = input(f"Nombre del ancla a esperar (default: wait_anchor_{contador_pasos}): ") or f"wait_anchor_{contador_pasos}"
+                        ruta_ancla = capturar_imagen_referencia(nombre_ancla, get_directorio_anchors(self.directorio_imagenes))
+                        tiempo_limite = input("Timeout en segundos (default: 30): ") or "30"
+                        archivo.write(f"WAIT_ANCHOR,0,0,{tiempo_limite},{os.path.basename(ruta_ancla)}\n")
+                        print(f"WAIT_ANCHOR guardado: {os.path.basename(ruta_ancla)}")
+                        contador_pasos += 1
+
+                    elif keyboard.is_pressed("m"):
+                        antirrebote("m")
+                        retraso = input("Introduce el tiempo de espera (en segundos): ")
+                        archivo.write(f"MAXIMIZE,0,0,{retraso},Power Apps\n")
+                        print("MAXIMIZE guardado.")
+
+                    elif keyboard.is_pressed("o"):
+                        antirrebote("o")
+                        retraso = input("Introduce el tiempo de espera (en segundos): ")
+                        archivo.write(f"GUARD,0,0,{retraso},\n")
+                        print("GUARD guardado (cierra obstrucciones conocidas).")
+
                     time.sleep(0.05)
 
         except KeyboardInterrupt:
@@ -177,6 +237,10 @@ class AutomatizacionVisual:
             ("r",     "Guardar TYPE_RAW (escribe sin hacer click)"),
             ("d",     "Capturar región del calendario para fecha automática"),
             ("a",     "Click aleatorio en cuadro AMARILLO"),
+            ("g",     "Capturar ancla y guardar CLICK_ANCHOR (sin coordenadas)"),
+            ("e",     "Capturar ancla y guardar WAIT_ANCHOR (esperar ancla)"),
+            ("m",     "Guardar MAXIMIZE (maximizar la app)"),
+            ("o",     "Guardar GUARD (cerrar obstrucciones/avisos conocidos)"),
             ("q",     "Salir"),
         ]
         print("\nComandos disponibles:")
@@ -196,9 +260,14 @@ class AutomatizacionVisual:
                 etiquetas[nombre] = i
         return etiquetas
 
-    def aplicar_coordenadas_visuales(self):
-        nombre_archivo = input("Introduce el nombre del archivo con las coordenadas: ")
-        ruta_archivo = os.path.join(self.directorio_base, nombre_archivo)
+    def aplicar_coordenadas_visuales(self, nombre_archivo=None):
+        if not nombre_archivo:
+            nombre_archivo = input("Introduce el nombre del archivo con las coordenadas: ")
+        ruta_archivo = (
+            nombre_archivo if os.path.exists(nombre_archivo)
+            else os.path.join(self.directorio_base, nombre_archivo)
+        )
+        nombre_archivo = os.path.basename(ruta_archivo)
 
         if not os.path.exists(ruta_archivo):
             print(f"No se encontró el archivo: {ruta_archivo}")
@@ -228,6 +297,7 @@ class AutomatizacionVisual:
         print("Aplicando coordenadas visuales...")
         print("Presiona ESC en cualquier momento para detener la ejecución")
 
+        mantener_pc_despierto(True)
         try:
             etiquetas = self._construir_indice_etiquetas(lineas)  # ✅ usa lista directamente
 
@@ -242,7 +312,7 @@ class AutomatizacionVisual:
                     break
 
                 linea = lineas[i].strip()
-                if not linea:
+                if not linea or linea.startswith("#"):
                     i += 1
                     continue
 
@@ -289,6 +359,19 @@ class AutomatizacionVisual:
 
                 accion, x, y, retraso, carga_util, hora_siguiente = analizado
                 self.logger.registrar(f"--- Paso {i+1}/{total_pasos}: {accion} ---")
+
+                self._esperar_desbloqueo()
+
+                if AUTO_GUARD and accion != "GUARD":
+                    try:
+                        cerrados = cerrar_obstrucciones(
+                            get_directorio_obstrucciones(self.directorio_imagenes),
+                            escalas=[1.0], logger=self.logger,
+                        )
+                        if cerrados:
+                            time.sleep(0.3)
+                    except Exception as e:
+                        self.logger.registrar(f"AUTO_GUARD falló: {e}", "WARNING")
 
                 max_intentos = reintentos_activos.pop(i, 0) + 1
                 on_fail = on_fail_goto_activo
@@ -342,6 +425,7 @@ class AutomatizacionVisual:
             self.logger.registrar(f"Tiempo total: {self.logger.tiempo_transcurrido:.2f} segundos")
             self.logger.registrar("=" * 60)
             self.logger.cerrar()
+            mantener_pc_despierto(False)
             print(f"\nLog guardado en: {ruta_log}")
             try:
                 salida_con_horas.close()
@@ -354,6 +438,10 @@ class AutomatizacionVisual:
         ACCIONES_CON_RETRASO = {
             "CLICK", "TYPE", "TYPE_RAW", "PRESS", "HOTKEY",
             "KEYEVENTS", "CLICK_WHEN_IMAGE", "CLICK_NEXT_DATE", "CLICK_RANDOM_YELLOW",
+            "LAUNCH", "FOCUS_WINDOW", "PASTE", "WAIT_UNTIL", "CLICK_IF_IMAGE",
+            "MAXIMIZE", "CLICK_ANCHOR", "CLICK_IF_ANCHOR", "VERIFY_ANCHOR", "GUARD",
+            "CLICK_TEXT", "CLICK_IF_TEXT", "VERIFY_TEXT", "CLICK_AVAILABLE_COLOR",
+            "SELECCIONAR_PARQUEO", "DROPDOWN", "SELECCIONAR_DIA", "MARCAR_1DIA",
         }
         if hora_siguiente:
             hora_out = hora_siguiente
@@ -394,6 +482,9 @@ class AutomatizacionVisual:
             for numero_linea, linea in enumerate(archivo, 1):
                 linea = linea.rstrip("\n")
                 if not linea.strip():
+                    continue
+
+                if linea.lstrip().startswith("#"):
                     continue
 
                 partes = linea.split(",", 4)

@@ -1,0 +1,50 @@
+# ============================================================
+# EJEMPLO: reservar un recurso en una app de escritorio
+# (versión genérica; sustituye textos y coordenadas por los de tu app)
+# ============================================================
+# ACCION,0,0,RETRASO,CARGA
+#   CLICK_TEXT   -> click por OCR. Flags: |exacto |doble |boton
+#   DROPDOWN     -> x,y = campo; CARGA = opción a elegir
+#   SELECCIONAR_DIA -> número de día o "auto" (semanas alternas)
+#   SELECCIONAR_PARQUEO -> busca por número y marca el checkbox disponible
+#   @HH:MM:SS en RETRASO -> esperar hasta esa hora antes del siguiente paso
+# ============================================================
+
+# 0. Preparar la app y cerrar avisos conocidos
+MAXIMIZE,0,0,1,MiApp
+GUARD,0,0,0.5,
+
+# 1. Ir a la sección de agenda
+WAIT_TEXT,0,0,60,Agendar
+CLICK_TEXT,0,0,1,Agendar
+WAIT_TEXT,0,0,30,Seleccione una fecha
+
+# 2. Elegir el día (usa "auto" con la regla de semanas, o un número)
+SELECCIONAR_DIA,0,0,1,auto
+WAIT_TEXT,0,0,10,Seleccione tipo de lugar y duración
+
+# 3. Tipo de recurso y duración
+DROPDOWN,940,686,1,TIPO_RECURSO
+MARCAR_1DIA,0,0,1,
+CLICK_TEXT,0,0,1,Continuar
+
+# 4. Ubicación (obligatoria para que cargue la disponibilidad)
+WAIT_TEXT,0,0,60,Seleccione
+DROPDOWN,920,173,1,PAIS
+DROPDOWN,920,219,1,UNIDAD
+DROPDOWN,920,266,1,UBICACION
+WAIT_TEXT,0,0,60,disponibles
+
+# 5. Elegir el primero disponible de la lista por prioridad
+SELECCIONAR_PARQUEO,0,0,1,39,38,37,36,35,34,33,32,31,105,106,104
+
+# 6. Continuar y confirmar
+CLICK_TEXT,0,0,1,Continuar
+WAIT_TEXT,0,0,15,todo bien
+CLICK_TEXT,0,0,1,Confirmar|exacto|boton
+WAIT_TEXT,0,0,60,Se ha reservado
+
+# 7. Espera programada (opcional): si necesitas alinear a una hora exacta
+#    (por ejemplo una reserva que se habilita a las 00:02):
+# WAIT_UNTIL,0,0,0,00:02:05
+# o en el retraso de cualquier paso:  120@00:02:05

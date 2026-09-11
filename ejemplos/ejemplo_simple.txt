@@ -1,0 +1,41 @@
+# ============================================================
+# EJEMPLO SIMPLE de automatización visual
+# Formato:  ACCION,X,Y,RETRASO,CARGA_UTIL
+# Las líneas que empiezan con # se ignoran.
+# ============================================================
+
+# Abrir una aplicación o URL (sin click inicial)
+LAUNCH,0,0,2,https://ejemplo.com
+FOCUS_WINDOW,0,0,1,Mi Navegador
+MAXIMIZE,0,0,1,Mi Navegador
+
+# Click en coordenadas
+CLICK,450,300,2,
+
+# Escribir texto en un campo (click + teclado)
+TYPE,960,540,1,texto de ejemplo
+
+# Escribir sin click previo (soporta acentos si usas PASTE)
+PASTE,0,0,1,Texto con acentos: ñ á é
+
+# Tecla y atajo
+PRESS,0,0,1,enter
+HOTKEY,0,0,1,ctrl+s
+
+# Esperar a que aparezca una imagen (retraso = timeout en segundos)
+WAIT_FOR_IMAGE,0,0,30,boton_aceptar.png
+
+# Click cuando aparezca una imagen (ancla robusta por OCR)
+CLICK_ANCHOR,0,0,2,boton_aceptar.png
+WAIT_TEXT,0,0,30,Guardado correctamente
+VERIFY_TEXT,0,0,2,Resumen
+
+# Manejo de errores: si falla la siguiente acción, saltar a RECUPERACION
+ON_FAIL_GOTO,0,0,0,RECUPERACION
+CLICK,800,450,1.5,
+
+# Saltar a FIN y etiquetas
+GOTO,0,0,0,FIN
+LABEL,0,0,0,RECUPERACION
+PRESS,0,0,1,esc
+LABEL,0,0,0,FIN

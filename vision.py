@@ -56,6 +56,10 @@ def esperar_imagen(ruta_imagen, tiempo_limite=30, confianza=0.8, logger=None):
     hora_inicio = time.time()
 
     while time.time() - hora_inicio < tiempo_limite:
+        if keyboard.is_pressed("esc"):
+            antirrebote("esc")
+            raise KeyboardInterrupt("Cancelado por usuario")
+
         try:
             ubicacion = pyautogui.locateOnScreen(ruta_imagen, confidence=confianza)
             if ubicacion:
@@ -67,7 +71,7 @@ def esperar_imagen(ruta_imagen, tiempo_limite=30, confianza=0.8, logger=None):
             if logger and not logger.advertencia_opencv_mostrada:
                 print(f"Advertencia (solo se muestra una vez): {e}")
                 logger.advertencia_opencv_mostrada = True
-        time.sleep(0.5)
+        time.sleep(0.25)
 
     print(f"Timeout: No se encontró la imagen después de {tiempo_limite} segundos")
     return None

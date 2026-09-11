@@ -10,6 +10,10 @@ automation_images/debug/*
 
 
 
+# Flujos personales (contienen datos del caso real)
+reserva_csi.txt
+onlypark.txt
+
 # Python
 __pycache__/
 *.pyc

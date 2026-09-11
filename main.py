@@ -1,4 +1,42 @@
+import sys
+
 from core import AutomatizacionVisual
+
+
+def _cli():
+    args = sys.argv[1:]
+    if not args:
+        return False
+
+    auto = AutomatizacionVisual()
+    comando = args[0].lower()
+
+    if comando in ("run", "ejecutar"):
+        archivo = args[1] if len(args) > 1 else None
+        auto.aplicar_coordenadas_visuales(archivo)
+        return True
+
+    if comando in ("validate", "validar"):
+        archivo = args[1] if len(args) > 1 else None
+        if not archivo:
+            print("Uso: python main.py validate <archivo.txt>")
+        else:
+            _validar(auto, archivo)
+        return True
+
+    print("Uso: python main.py [run|validate] <archivo.txt>")
+    return True
+
+
+def _validar(auto, archivo):
+    import os
+    ruta = archivo if os.path.exists(archivo) else os.path.join(auto.directorio_base, archivo)
+    if not os.path.exists(ruta):
+        print(f"No se encontró: {ruta}")
+        return
+    lineas = auto.validar_y_limpiar_archivo(ruta)
+    if lineas:
+        print(f"Archivo válido con {len(lineas)} líneas.")
 
 
 def menu():
@@ -35,4 +73,5 @@ def menu():
 
 
 if __name__ == "__main__":
-    menu()
+    if not _cli():
+        menu()
