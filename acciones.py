@@ -342,8 +342,9 @@ def _enfocar_busqueda(logger):
 def _escribir_busqueda(numero):
     pyautogui.click(BUSCAR_PARQUEO["campo_x"], BUSCAR_PARQUEO["campo_y"])
     time.sleep(0.3)
-    pyautogui.hotkey("ctrl", "a")
-    pyautogui.press("backspace")
+    pyautogui.press("end")
+    for _ in range(12):
+        pyautogui.press("backspace")
     time.sleep(0.2)
     pyautogui.write(str(numero), interval=0.12)
     time.sleep(0.3)

@@ -12,14 +12,16 @@ Notas:
   ignorarla si tu app no la usa.
 """
 
-# --- Regla de semanas alternas (ejemplo) ---
-# fecha_ancla_semana_on: un lunes de una semana habilitada conocida.
-# dia_semana_objetivo:   0=lunes ... 6=domingo.
-# dias_anticipacion:     cuántos días antes se habilita la fecha a reservar.
+# --- Regla de fecha a reservar ---
+# modo "anticipacion": la fecha que la app habilita hoy = hoy + dias_anticipacion
+#   (14/09 -> 22/09, 15/09 -> 23/09, ...).
+# modo "dia_semana": el primer `dia_semana_objetivo` (0=lunes..6=domingo) en
+#   semana habilitada; usa `fecha_ancla_semana_on` (un lunes de semana on).
 RESERVA = {
-    "fecha_ancla_semana_on": "2026-09-07",
-    "dia_semana_objetivo": 0,
+    "modo": "anticipacion",
     "dias_anticipacion": 8,
+    "fecha_ancla_semana_on": "2026-09-07",
+    "dia_semana_objetivo": 1,
 }
 
 DIAS_SEMANA = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]

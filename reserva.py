@@ -22,22 +22,29 @@ def es_semana_on(fecha, cfg=None):
 
 def calcular_fecha_objetivo(hoy=None, cfg=None):
     """
-    Devuelve la próxima fecha a reservar:
-    el primer día del `dia_semana_objetivo` a partir de hoy + `dias_anticipacion`
-    que caiga en una semana habilitada (alternas).
+    Fecha a reservar.
+
+    Modos (cfg["modo"]):
+      - "anticipacion" (por defecto): hoy + `dias_anticipacion`. Es la fecha que
+        la app habilita hoy a las 00:02 (una por dia). Ej.: 14/09 -> 22/09,
+        15/09 -> 23/09.
+      - "dia_semana": el primer `dia_semana_objetivo` despues de hoy que caiga en
+        una semana habilitada (alternas).
     """
     cfg = _leer_config(cfg)
     hoy = hoy or date.today()
-    dia_objetivo = int(cfg["dia_semana_objetivo"])
 
-    base = hoy + timedelta(days=int(cfg["dias_anticipacion"]))
-    delta = (dia_objetivo - base.weekday()) % 7
-    candidato = base + timedelta(days=delta)
+    if cfg.get("modo", "anticipacion") == "dia_semana":
+        dia_objetivo = int(cfg["dia_semana_objetivo"])
+        delta = (dia_objetivo - hoy.weekday()) % 7
+        if delta == 0:
+            delta = 7
+        candidato = hoy + timedelta(days=delta)
+        while not es_semana_on(candidato, cfg):
+            candidato += timedelta(days=7)
+        return candidato
 
-    while not es_semana_on(candidato, cfg):
-        candidato += timedelta(days=7)
-
-    return candidato
+    return hoy + timedelta(days=int(cfg.get("dias_anticipacion", 8)))
 
 
 def calcular_fecha_objetivo_str(hoy=None, cfg=None):
