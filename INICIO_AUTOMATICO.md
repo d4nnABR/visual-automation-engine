@@ -21,25 +21,33 @@ Dejalo abierto. A las 00:02 selecciona el dia correcto y reserva. Detener con ES
 Nota: si lo inicias por la manana, como las 00:02 ya pasaron y faltan mas de 12 h,
 no espera y se ejecuta de inmediato (por eso debes iniciarlo por la noche).
 
-## Opcion 2: lanzador .bat
+## Opcion 2: lanzador .bat (ya incluido)
 
-Crea `Reservar.bat`:
+El archivo ya existe en la raiz del proyecto:
 
-```bat
-@echo off
-cd /d "C:\Users\gary.abrigo\Downloads\Projects\VisualPilot"
-python main.py run reserva_csi.txt
-pause
+```
+C:\Users\gary.abrigo\Downloads\Projects\VisualPilot\ReservarParqueo.bat
 ```
 
-Doble clic por la noche.
+Hace `cd` a la carpeta del proyecto y ejecuta el flujo, guardando el log en
+`automation_images\debug\reserva_bat.log`. Doble clic por la noche.
 
 ## Opcion 3: Programador de tareas (Task Scheduler)
 
-- Desencadenador: diario a las 00:01.
-- Accion: iniciar `python.exe` con argumentos `main.py run reserva_csi.txt`
-  y "Iniciar en" = carpeta del proyecto.
-- Marcar "Ejecutar solo cuando el usuario haya iniciado sesion" (interactivo).
+Programa el `.bat` **a las 23:58** (4 min antes de las 00:02), asi el proceso ya
+esta vivo y esperando la hora.
+
+- Desencadenador: **Diario, 23:58**.
+- Accion: iniciar un programa -> `C:\Users\gary.abrigo\Downloads\Projects\VisualPilot\ReservarParqueo.bat`
+  (o `cmd.exe` con argumentos `/c "...\ReservarParqueo.bat"`).
+- "Iniciar en": `C:\Users\gary.abrigo\Downloads\Projects\VisualPilot`.
+- Marcar **"Ejecutar solo cuando el usuario haya iniciado sesion"** (interactivo:
+  la automatizacion necesita la sesion desbloqueada).
+- Marcar **"Ejecutar la tarea lo antes posible tras una inicio programado
+  omitido"** por si la PC estaba apagada a las 23:58.
+
+Si quieres que tambien corra **al iniciar la PC**, agrega un segundo desencadenador
+"Al iniciar sesion".
 
 Puede estar **bloqueado por politica de TI**. Ademas, si la sesion esta bloqueada,
-la automatizacion no puede clickear.
+la automatizacion no puede clickear (no envia entrada).
