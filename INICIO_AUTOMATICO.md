@@ -26,7 +26,7 @@ no espera y se ejecuta de inmediato (por eso debes iniciarlo por la noche).
 El archivo ya existe en la raiz del proyecto:
 
 ```
-C:\Users\gary.abrigo\Downloads\Projects\VisualPilot\ReservarParqueo.bat
+C:\Users\gary.abrigo\Downloads\Projects\VisualPilot\auto.bat
 ```
 
 Hace `cd` a la carpeta del proyecto y ejecuta el flujo, guardando el log en
@@ -38,9 +38,9 @@ Programa el `.bat` **a las 23:58** (4 min antes de las 00:02), asi el proceso ya
 esta vivo y esperando la hora.
 
 - Desencadenador: **Diario, 23:58**.
-- Accion: iniciar un programa -> `C:\Users\gary.abrigo\Downloads\Projects\VisualPilot\ReservarParqueo.bat`
-  (o `cmd.exe` con argumentos `/c "...\ReservarParqueo.bat"`).
-- "Iniciar en": `C:\Users\gary.abrigo\Downloads\Projects\VisualPilot`.
+- Accion: iniciar un programa -> `C:\Users\gary.abrigo\Downloads\Projects\VisualPilot\auto.bat`.
+  En "Agregar argumentos" y "Iniciar en" puedes dejarlos **vacios** (el `.bat` se
+  ubica solo con `%~dp0`). Alternativa: `cmd.exe` con `/c "...\auto.bat"`.
 - Marcar **"Ejecutar solo cuando el usuario haya iniciado sesion"** (interactivo:
   la automatizacion necesita la sesion desbloqueada).
 - Marcar **"Ejecutar la tarea lo antes posible tras una inicio programado
