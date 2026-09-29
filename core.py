@@ -8,7 +8,7 @@ from config import (
     cargar_directorio_base, guardar_directorio_base,
     get_directorio_imagenes, get_directorio_debug,
     get_directorio_anchors, get_directorio_obstrucciones,
-    AUTO_GUARD, ACCIONES_VALIDAS,
+    AUTO_GUARD, ACCIONES_VALIDAS, ACCIONES_CRITICAS,
 )
 from utils import (
     obtener_marca_tiempo, antirrebote, parse_retraso_y_hora_siguiente,
@@ -409,6 +409,12 @@ class AutomatizacionVisual:
                     if on_fail and on_fail in etiquetas:
                         self.logger.registrar(f"ON_FAIL_GOTO → saltando a: {on_fail}", "WARNING")
                         i = etiquetas[on_fail]
+                    elif accion in ACCIONES_CRITICAS:
+                        self.logger.registrar(
+                            f"{accion} es crítica: se detiene el flujo para no continuar con datos incorrectos",
+                            "CRITICAL",
+                        )
+                        break
                     else:
                         i += 1
 

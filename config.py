@@ -57,6 +57,11 @@ ACCIONES_VALIDAS = [
     "MARCAR_1DIA",
 ]
 
+# Si una de estas acciones falla (y no hay ON_FAIL_GOTO), se detiene el flujo.
+# Ej.: si no se pudo elegir el día, la app deja el de hoy preseleccionado y se
+# reservaría la fecha equivocada.
+ACCIONES_CRITICAS = {"SELECCIONAR_DIA"}
+
 # Tiempo máximo (segundos) que CLICK_IF_IMAGE busca la imagen antes de continuar.
 CLICK_IF_IMAGE_TIMEOUT = 2.0
 

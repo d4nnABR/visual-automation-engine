@@ -11,7 +11,7 @@ from config import (
     CLICK_IF_IMAGE_TIMEOUT, UMBRAL_ANCHOR, MAX_Y_BOTON,
     get_directorio_anchors, get_directorio_obstrucciones,
 )
-from ajustes import BUSCAR_PARQUEO, DURACION_1DIA
+from ajustes import BUSCAR_PARQUEO, DURACION_1DIA, CALENDARIO, MESES
 from utils import antirrebote, esperar_hasta_hora
 from vision import (
     esperar_imagen,
@@ -282,40 +282,9 @@ def ejecutar_accion(accion, x, y, retraso, carga_util, hora_siguiente, directori
         _esperar_retraso(hora_siguiente, retraso, logger)
 
     elif accion == "SELECCIONAR_DIA":
-        from ajustes import MESES
-        dia = (carga_util or "").strip()
-        if not dia or dia.lower() == "auto":
-            from reserva import calcular_fecha_objetivo
-            dia = str(calcular_fecha_objetivo().day)
-
-        esperar_texto("Seleccione una fecha", tiempo_limite=15, logger=logger)
-        for _ in range(20):
-            if any(m in (l["texto"].lower()) for l in leer_texto() for m in MESES):
-                break
-            time.sleep(0.5)
-
-        linea = None
-        for _ in range(4):
-            linea = buscar_texto(dia, exacto=True)
-            if linea:
-                break
-            time.sleep(1.0)
-
-        if not linea:
-            logger.registrar(f"Día '{dia}' no apareció en el calendario", "WARNING")
+        fecha = _resolver_fecha_dia(carga_util)
+        if not _seleccionar_fecha_calendario(fecha, logger):
             return FALLO
-
-        pyautogui.moveTo(linea["x"], linea["y"], duration=0.3)
-        pyautogui.click()
-        time.sleep(0.15)
-        pyautogui.click()
-        logger.registrar(f"Día {dia} seleccionado (doble click en {linea['x']}, {linea['y']})")
-        time.sleep(1.2)
-
-        if not esperar_texto("tipo de lugar", tiempo_limite=8, logger=logger):
-            logger.registrar("El día no quedó seleccionado (no avanzó)", "WARNING")
-            return FALLO
-
         _esperar_retraso(hora_siguiente, retraso, logger)
 
     elif accion == "SELECCIONAR_PARQUEO":
@@ -331,6 +300,89 @@ def ejecutar_accion(accion, x, y, retraso, carga_util, hora_siguiente, directori
         raise ValueError(f"Acción no soportada: {accion}")
 
     return EXITO
+
+
+def _resolver_fecha_dia(carga_util):
+    """"auto" -> regla de reserva.py; "AAAA-MM-DD" -> esa fecha; "N" -> próximo día N."""
+    from datetime import date, datetime
+    valor = (carga_util or "").strip()
+    if not valor or valor.lower() == "auto":
+        from reserva import calcular_fecha_objetivo
+        return calcular_fecha_objetivo()
+    if "-" in valor:
+        return datetime.strptime(valor, "%Y-%m-%d").date()
+    dia = int(valor)
+    hoy = date.today()
+    anio, mes = hoy.year, hoy.month
+    if dia < hoy.day:
+        anio, mes = (anio + 1, 1) if mes == 12 else (anio, mes + 1)
+    return date(anio, mes, dia)
+
+
+def _leer_mes_calendario():
+    """Devuelve (anio, mes, y_encabezado) del calendario visible, o None."""
+    for linea in leer_texto():
+        palabras = linea["texto"].lower().split()
+        if len(palabras) != len(linea["palabras"]):
+            continue
+        for i, palabra in enumerate(palabras[:-1]):
+            siguiente = palabras[i + 1]
+            if palabra in MESES and siguiente.isdigit() and len(siguiente) == 4:
+                p = linea["palabras"][i]
+                return int(siguiente), MESES.index(palabra) + 1, p["y"] + p["h"] // 2
+    return None
+
+
+def _seleccionar_fecha_calendario(fecha, logger):
+    """Doble click en la celda de `fecha` (avanzando de mes si hace falta) y verifica."""
+    from datetime import date, timedelta
+    logger.registrar(f"Fecha objetivo: {fecha.isoformat()}")
+    esperar_texto("Seleccione una fecha", tiempo_limite=15, logger=logger)
+
+    for _ in range(3):
+        visible = None
+        for _ in range(20):
+            visible = _leer_mes_calendario()
+            if visible:
+                break
+            time.sleep(0.5)
+        if not visible:
+            logger.registrar("No se pudo leer el mes del calendario", "WARNING")
+            return False
+
+        anio, mes, y_encabezado = visible
+        primero = date(anio, mes, 1)
+        inicio = primero - timedelta(days=(primero.weekday() + 1) % 7)  # domingo
+        indice = (fecha - inicio).days
+        if 0 <= indice < 42:
+            break
+        if indice < 0:
+            logger.registrar(f"La fecha {fecha} es anterior al mes visible", "WARNING")
+            return False
+        logger.registrar(f"{fecha} no está en la vista de {MESES[mes - 1]} {anio}; mes siguiente")
+        pyautogui.click(*CALENDARIO["flecha_siguiente"])
+        time.sleep(1.2)
+    else:
+        logger.registrar(f"No se llegó al mes de {fecha}", "WARNING")
+        return False
+
+    dy = y_encabezado - CALENDARIO["encabezado_y"]
+    x = CALENDARIO["col_x"][indice % 7]
+    y = CALENDARIO["fila_y"][indice // 7] + dy
+
+    pyautogui.moveTo(x, y, duration=0.3)
+    pyautogui.click()
+    time.sleep(0.15)
+    pyautogui.click()
+    logger.registrar(f"Día {fecha.day} ({fecha.isoformat()}): doble click en ({x}, {y})")
+    time.sleep(1.2)
+
+    m = CALENDARIO["medio_celda"]
+    if not hay_color_naranja((x - m, y - m, 2 * m, 2 * m), minimo=100):
+        logger.registrar(f"El día {fecha.day} no quedó seleccionado (celda sin naranja)", "WARNING")
+        return False
+    logger.registrar(f"Día {fecha.day} seleccionado correctamente")
+    return True
 
 
 def _enfocar_busqueda(logger):

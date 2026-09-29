@@ -94,6 +94,11 @@ python main.py run reserva_csi.txt
 - La app de reserva tiene un **temporizador (~5 min)**; el flujo debe ser rapido.
 - El banner rojo puede aparecer de forma transitoria; `GUARD` lo cierra.
 - `onlypark.txt` es un flujo antiguo; ya no se usa.
+- `SELECCIONAR_DIA` elige la celda por **posicion en la cuadricula** (lee el mes
+  del encabezado, avanza con `>` si hace falta) y verifica que quede naranja.
+  Si falla, el flujo **se detiene** (`ACCIONES_CRITICAS` en `config.py`); antes
+  seguia y la app reservaba el dia preseleccionado (hoy). Calibracion en
+  `CALENDARIO` de `ajustes.py`.
 
 ---
 

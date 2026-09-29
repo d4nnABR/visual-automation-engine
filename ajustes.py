@@ -44,3 +44,17 @@ BUSCAR_PARQUEO = {
 
 # Checkbox "1 Día" de la pantalla de ejemplo (layout maximizado)
 DURACION_1DIA = (1050, 742)
+
+# --- Calendario "Seleccione una fecha" (layout maximizado) ---
+# Cuadrícula de 6 semanas x 7 días que empieza en domingo. El día se elige por
+# posición de celda, no por OCR del número: los dígitos sueltos fallan en OCR y
+# el mismo número aparece dos veces (p. ej. 7/sep en gris y 7/oct).
+# `encabezado_y` es la Y del texto "septiembre 2026"; si el OCR lo encuentra a
+# otra altura, toda la cuadrícula se desplaza lo mismo.
+CALENDARIO = {
+    "encabezado_y": 150,
+    "col_x": [746, 818, 890, 961, 1033, 1105, 1176],
+    "fila_y": [268, 324, 380, 437, 493, 549],
+    "flecha_siguiente": (1185, 145),
+    "medio_celda": 22,  # semilado de la zona donde se comprueba el naranja
+}
