@@ -8,20 +8,29 @@ Notas:
 - Las coordenadas están calibradas a la ventana MAXIMIZADA en 1920x1080 al 100%.
   Si cambias resolución, zoom o tamaño de ventana, hay que recalibrarlas.
 - `BUSCAR_PARQUEO` describe el campo de búsqueda de la pantalla de ejemplo.
-- `RESERVA` es la regla de "semanas alternas" del ejemplo (opcional): puedes
-  ignorarla si tu app no la usa.
+- `RESERVA` son los VALORES POR DEFECTO de la reserva. Lo que se cambia desde
+  el menú (opción "Configurar reserva") se guarda en `config_usuario.json` y
+  tiene prioridad sobre esto.
 """
 
-# --- Regla de fecha a reservar ---
-# modo "anticipacion": la fecha que la app habilita hoy = hoy + dias_anticipacion
+# --- Reserva (valores por defecto; editables desde el menú) ---
+# hora_inicio: hora en que la app habilita la fecha; el flujo la usa como
+#   {HORA_INICIO} en WAIT_UNTIL.
+# modo "anticipacion": fecha a reservar = hoy + dias_anticipacion
 #   (14/09 -> 22/09, 15/09 -> 23/09, ...).
-# modo "dia_semana": el primer `dia_semana_objetivo` (0=lunes..6=domingo) en
-#   semana habilitada; usa `fecha_ancla_semana_on` (un lunes de semana on).
+# modo "dia_semana": el próximo `dia_semana_objetivo` (0=lunes..6=domingo).
+# semanas_alternas: si es True, solo se reserva cuando la fecha cae en una
+#   semana "sí" (lunes a domingo). `fecha_ancla_semana_on` es un lunes de semana
+#   "sí"; desde ahí se alternan sí / no / sí...
+# prioridad: números de parqueo en orden; el flujo la usa como {PRIORIDAD}.
 RESERVA = {
+    "hora_inicio": "00:02:00",
     "modo": "anticipacion",
     "dias_anticipacion": 8,
-    "fecha_ancla_semana_on": "2026-09-07",
     "dia_semana_objetivo": 1,
+    "semanas_alternas": False,
+    "fecha_ancla_semana_on": "2026-09-07",
+    "prioridad": "39,38,37,36,35,34,33,32,31,105,106,104",
 }
 
 DIAS_SEMANA = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]

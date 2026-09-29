@@ -5,13 +5,19 @@
 # ACCION,0,0,RETRASO,CARGA
 #   CLICK_TEXT   -> click por OCR. Flags: |exacto |doble |boton
 #   DROPDOWN     -> x,y = campo; CARGA = opción a elegir
-#   SELECCIONAR_DIA -> número de día o "auto" (semanas alternas)
+#   SELECCIONAR_DIA -> "auto" (regla del menú), número de día o AAAA-MM-DD
 #   SELECCIONAR_PARQUEO -> busca por número y marca el checkbox disponible
+#   VERIFICAR_SEMANA -> termina sin error si la fecha cae en semana libre
 #   @HH:MM:SS en RETRASO -> esperar hasta esa hora antes del siguiente paso
+#
+# Variables (se configuran en el menú, opción "Configurar reserva"):
+#   {HORA_INICIO}  {PRIORIDAD}  {DIAS_ANTICIPACION}
 # ============================================================
 
-# 0. Preparar la app y cerrar avisos conocidos
+# 0. Preparar la app, esperar la hora de habilitación y ver si toca reservar
 MAXIMIZE,0,0,1,MiApp
+WAIT_UNTIL,0,0,0,{HORA_INICIO}
+VERIFICAR_SEMANA,0,0,0,
 GUARD,0,0,0.5,
 
 # 1. Ir a la sección de agenda
@@ -36,7 +42,7 @@ DROPDOWN,920,266,1,UBICACION
 WAIT_TEXT,0,0,60,disponibles
 
 # 5. Elegir el primero disponible de la lista por prioridad
-SELECCIONAR_PARQUEO,0,0,1,39,38,37,36,35,34,33,32,31,105,106,104
+SELECCIONAR_PARQUEO,0,0,1,{PRIORIDAD}
 
 # 6. Continuar y confirmar
 CLICK_TEXT,0,0,1,Continuar
@@ -44,7 +50,5 @@ WAIT_TEXT,0,0,15,todo bien
 CLICK_TEXT,0,0,1,Confirmar|exacto|boton
 WAIT_TEXT,0,0,60,Se ha reservado
 
-# 7. Espera programada (opcional): si necesitas alinear a una hora exacta
-#    (por ejemplo una reserva que se habilita a las 00:02):
-# WAIT_UNTIL,0,0,0,00:02:05
-# o en el retraso de cualquier paso:  120@00:02:05
+# Nota: también se puede esperar una hora en el retraso de cualquier paso:
+#   120@00:02:05

@@ -7,27 +7,28 @@ import pyautogui
 import keyboard
 import pyperclip
 import pygetwindow as gw
-from config import (
+from .config import (
     CLICK_IF_IMAGE_TIMEOUT, UMBRAL_ANCHOR, MAX_Y_BOTON,
     get_directorio_anchors, get_directorio_obstrucciones,
 )
-from ajustes import BUSCAR_PARQUEO, DURACION_1DIA, CALENDARIO, MESES
-from utils import antirrebote, esperar_hasta_hora
-from vision import (
+from .ajustes import BUSCAR_PARQUEO, DURACION_1DIA, CALENDARIO, MESES
+from .utils import antirrebote, esperar_hasta_hora
+from .vision import (
     esperar_imagen,
     encontrar_y_clickear_proxima_fecha,
     encontrar_y_clickear_amarillo_aleatorio,
 )
-from vision_ui import (
+from .vision_ui import (
     encontrar_plantilla, click_plantilla, esperar_plantilla,
     maximizar_ventana, cerrar_obstrucciones, click_amarillo,
     hay_color_naranja, hay_marca_oscura, TITULO_VENTANA_DEFECTO,
 )
-from ocr import click_texto, esperar_texto, buscar_texto, leer_texto
+from .ocr import click_texto, esperar_texto, buscar_texto, leer_texto
 
-# Resultado especial para señalar fallo sin lanzar excepción
+# Resultados de una acción (sin lanzar excepción)
 FALLO = "FALLO"
 EXITO = "EXITO"
+FIN = "FIN"  # terminar el flujo correctamente (p. ej. semana libre: nada que reservar)
 
 
 def _esperar_retraso(hora_siguiente, retraso, logger):
@@ -281,6 +282,15 @@ def ejecutar_accion(accion, x, y, retraso, carga_util, hora_siguiente, directori
         time.sleep(0.8)
         _esperar_retraso(hora_siguiente, retraso, logger)
 
+    elif accion == "VERIFICAR_SEMANA":
+        from .reserva import calcular_fecha_objetivo, toca_reservar
+        fecha = calcular_fecha_objetivo()
+        if not toca_reservar(fecha):
+            logger.registrar(f"Fecha {fecha.isoformat()} cae en semana libre: no toca reservar")
+            return FIN
+        logger.registrar(f"Fecha {fecha.isoformat()}: toca reservar")
+        _esperar_retraso(hora_siguiente, retraso, logger)
+
     elif accion == "SELECCIONAR_DIA":
         fecha = _resolver_fecha_dia(carga_util)
         if not _seleccionar_fecha_calendario(fecha, logger):
@@ -307,7 +317,7 @@ def _resolver_fecha_dia(carga_util):
     from datetime import date, datetime
     valor = (carga_util or "").strip()
     if not valor or valor.lower() == "auto":
-        from reserva import calcular_fecha_objetivo
+        from .reserva import calcular_fecha_objetivo
         return calcular_fecha_objetivo()
     if "-" in valor:
         return datetime.strptime(valor, "%Y-%m-%d").date()
@@ -386,13 +396,15 @@ def _seleccionar_fecha_calendario(fecha, logger):
 
 
 def _enfocar_busqueda(logger):
-    if not click_texto(BUSCAR_PARQUEO["campo_busqueda"], logger=logger, obligatorio=False):
-        pyautogui.click(BUSCAR_PARQUEO["campo_x"], BUSCAR_PARQUEO["campo_y"])
-    time.sleep(0.4)
+    """Localiza el campo por OCR (tolera cambios de layout) y fija su posición."""
+    hallado = click_texto(BUSCAR_PARQUEO["campo_busqueda"], logger=logger, obligatorio=False)
+    if hallado:
+        return hallado["x"], hallado["y"]
+    return BUSCAR_PARQUEO["campo_x"], BUSCAR_PARQUEO["campo_y"]
 
 
-def _escribir_busqueda(numero):
-    pyautogui.click(BUSCAR_PARQUEO["campo_x"], BUSCAR_PARQUEO["campo_y"])
+def _escribir_busqueda(numero, campo):
+    pyautogui.click(*campo)
     time.sleep(0.3)
     pyautogui.press("end")
     for _ in range(12):
@@ -416,19 +428,19 @@ def _buscar_resultado(numero, intentos=3):
 
 def _seleccionar_parqueo(prioridad, logger):
     """
-    Recorre la prioridad: busca el número, marca su checkbox y pulsa Continuar.
-    Si llega a la pantalla de confirmación ('¿Está todo bien?') termina; si no,
-    vuelve con Regresar y prueba el siguiente número. Así no se queda pegado si
-    un parqueo aparece en la lista pero no se puede reservar.
+    Recorre la prioridad: escribe el número en el buscador y, si el resultado
+    aparece con su checkbox naranja, lo marca. Solo pasa al siguiente número si
+    el parqueo no aparece, no tiene checkbox o el check no queda marcado.
+    Continuar/Confirmar son pasos siguientes del flujo.
     """
-    _enfocar_busqueda(logger)
+    campo = _enfocar_busqueda(logger)
+    time.sleep(0.4)
 
     for numero in prioridad:
-        _escribir_busqueda(numero)
+        _escribir_busqueda(numero, campo)
         linea = _buscar_resultado(numero)
         if not linea:
             logger.registrar(f"Parqueo {numero} no disponible, probando el siguiente...", "WARNING")
-            _enfocar_busqueda(logger)
             continue
 
         palabra = linea["palabras"][0]
@@ -446,7 +458,6 @@ def _seleccionar_parqueo(prioridad, logger):
 
         if not hay_marca_oscura((x - 13, y - 13, 26, 26)):
             logger.registrar(f"Parqueo {numero} no se marcó; probando el siguiente...", "WARNING")
-            _enfocar_busqueda(logger)
             continue
 
         logger.registrar(f"Parqueo {numero} SELECCIONADO (checkbox marcado)")

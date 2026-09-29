@@ -4,7 +4,7 @@ import asyncio
 import tempfile
 import pyautogui
 import keyboard
-from utils import antirrebote
+from .utils import antirrebote
 
 try:
     from winsdk.windows.media.ocr import OcrEngine

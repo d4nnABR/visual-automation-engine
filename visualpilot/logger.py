@@ -2,8 +2,8 @@ import os
 import time
 import pyautogui
 from datetime import datetime
-from utils import obtener_marca_tiempo
-from config import CAPTURAR_SCREENSHOTS_ERROR
+from .utils import obtener_marca_tiempo
+from .config import CAPTURAR_SCREENSHOTS_ERROR
 
 
 

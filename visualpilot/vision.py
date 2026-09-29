@@ -2,7 +2,7 @@ import time
 import random
 import pyautogui
 import keyboard
-from utils import antirrebote
+from .utils import antirrebote
 
 
 def seleccionar_region():

@@ -7,7 +7,7 @@ import numpy as np
 import pyautogui
 import pygetwindow as gw
 import keyboard
-from utils import antirrebote
+from .utils import antirrebote
 
 ESCALAS_DEFECTO = [1.0, 0.95, 1.05, 0.9, 1.1, 0.85, 1.15, 0.8, 1.2, 0.75, 1.25]
 

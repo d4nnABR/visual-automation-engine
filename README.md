@@ -7,7 +7,7 @@ nativo de Windows**, **deteccion de color** y coordenadas, con control de flujo,
 cierres de avisos y verificaciones de seguridad.
 
 > Adaptalo a tu app: graba tus propias anclas y escribe tu propio `.txt`.
-> El motor no depende de ninguna aplicacion en particular. Ver `ejemplos/`.
+> El motor no depende de ninguna aplicacion en particular. Ver `flujos/ejemplos/`.
 
 ---
 
@@ -61,15 +61,19 @@ python main.py validate mi_flujo.txt
 
 Para detener una ejecucion en cualquier momento: **ESC**.
 
+Los flujos se buscan en `flujos/` (o por ruta completa). `run` devuelve codigo de
+salida `0` si termino bien (o no tocaba reservar) y `1` si hubo errores.
+
 ### Opciones del menu
 
-1. Registrar nuevas coordenadas visuales.
-2. Aplicar (ejecutar) un archivo `.txt`.
-3. Continuar una grabacion existente.
-4. Ver imagenes almacenadas.
-5. Validar un archivo `.txt`.
-6. Establecer directorio base.
-7. Salir.
+1. Ejecutar un flujo.
+2. **Configurar reserva**: hora de inicio, modo de fecha (anticipacion o dia de
+   semana), semanas alternas (y cual semana toca) y prioridad de parqueos.
+   Se guarda en `config_usuario.json`.
+3. Ver ultimo log (resumen: fecha elegida, parqueo, errores).
+4. Limpiar debug (borra logs y capturas de mas de N dias, con confirmacion).
+5. Grabar flujo nuevo · 6. Continuar grabacion.
+7. Validar un flujo · 8. Ver imagenes · 9. Directorio base · 0. Salir.
 
 ---
 
@@ -79,7 +83,12 @@ Para detener una ejecucion en cualquier momento: **ESC**.
 ACCION,X,Y,RETRASO,CARGA
 ```
 
-Las lineas que empiezan con `#` se ignoran. Hay flujos completos en `ejemplos/`.
+Las lineas que empiezan con `#` se ignoran. Hay flujos completos en
+`flujos/ejemplos/`.
+
+Variables: `{HORA_INICIO}`, `{PRIORIDAD}` y `{DIAS_ANTICIPACION}` se reemplazan
+al cargar el flujo con lo configurado en el menu (opcion 2). Una variable
+desconocida invalida la linea.
 
 | Accion | Descripcion |
 |---|---|
@@ -109,9 +118,10 @@ Las lineas que empiezan con `#` se ignoran. Hay flujos completos en `ejemplos/`.
 | `WAIT_TEXT` | Esperar a que aparezca un texto (retraso = timeout) |
 | `VERIFY_TEXT` | Fallar si el texto no esta (no hace click) |
 | `DROPDOWN` | `x,y` = campo; `CARGA` = opcion a elegir (por OCR) |
-| `SELECCIONAR_DIA` | Elegir un dia del calendario (numero o `auto`) |
+| `SELECCIONAR_DIA` | Elegir un dia del calendario por posicion de celda (`auto`, numero o `AAAA-MM-DD`); verifica la seleccion y, si falla, detiene el flujo |
 | `MARCAR_1DIA` | Marcar el checkbox "1 dia" (calibracion de ejemplo) |
 | `SELECCIONAR_PARQUEO` | Buscar un recurso por numero y marcar su checkbox |
+| `VERIFICAR_SEMANA` | Si hay semanas alternas y la fecha a reservar cae en semana libre, termina el flujo sin error |
 | `GUARD` | Cerrar avisos/banners conocidos |
 | `LABEL` / `GOTO` / `RETRY` / `ON_FAIL_GOTO` | Control de flujo |
 
@@ -169,13 +179,13 @@ automatizacion requiere una sesion desbloqueada.
 1. Graba tus imagenes de referencia con el grabador (`g` = ancla, `e` = ancla de
    espera, `o` = obstruccion, `m` = maximizar).
 2. Escribe tu `.txt` con el catalogo de acciones de arriba.
-3. Calibra las coordenadas en `ajustes.py` para tu ventana **maximizada** a una
+3. Calibra las coordenadas en `visualpilot/ajustes.py` para tu ventana **maximizada** a una
    resolucion/zoom fijos.
 4. Ejecuta `python main.py run mi_flujo.txt`.
 
 Los modulos del motor son genericos; solo son especificos de una app los flujos,
-las imagenes y `ajustes.py`. `reserva.py` es un ejemplo opcional de logica de
-"semanas alternas" que puedes ignorar.
+las imagenes y `visualpilot/ajustes.py`. `visualpilot/reserva.py` es la logica de
+fecha y "semanas alternas" del ejemplo; puedes ignorarla.
 
 ---
 
@@ -183,20 +193,24 @@ las imagenes y `ajustes.py`. `reserva.py` es un ejemplo opcional de logica de
 
 ```
 VisualPilot/
-├── main.py            # Punto de entrada (menu + CLI)
-├── core.py            # Orquestacion, control de flujo, guard de bloqueo
-├── acciones.py        # Ejecucion de acciones
-├── vision.py          # Utilidades de imagen/color
-├── vision_ui.py       # Anclas (OpenCV), maximizar, guard, color
-├── ocr.py             # OCR nativo de Windows
-├── reserva.py         # Ejemplo: logica de semanas alternas
-├── ajustes.py         # Calibracion por app (editar para tu app)
-├── config.py          # Configuracion generica del motor
-├── utils.py           # Utilidades (tiempo, deteccion de bloqueo, keep-awake)
-├── logger.py          # Logs y capturas de error
-├── ejemplos/          # Flujos de ejemplo genericos
-├── herramientas/      # Utilidades (generar anclas desde capturas)
-└── automation_images/ # anchors/ · obstrucciones/ · debug/
+├── main.py              # Punto de entrada (menu + CLI)
+├── auto.bat             # Lanzador para el Programador de tareas
+├── visualpilot/
+│   ├── menu.py          # Menu, configuracion de reserva, logs, limpieza, CLI
+│   ├── core.py          # Orquestacion, control de flujo, variables, guard de bloqueo
+│   ├── acciones.py      # Ejecucion de acciones
+│   ├── vision.py        # Utilidades de imagen/color (acciones legacy)
+│   ├── vision_ui.py     # Anclas (OpenCV), maximizar, guard, color
+│   ├── ocr.py           # OCR nativo de Windows
+│   ├── reserva.py       # Fecha a reservar y semanas alternas
+│   ├── ajustes.py       # Calibracion por app y valores por defecto de reserva
+│   ├── config.py        # Configuracion del motor y config_usuario.json
+│   ├── utils.py         # Tiempo, deteccion de bloqueo, keep-awake
+│   └── logger.py        # Logs y capturas de error
+├── flujos/              # Flujos .txt (personales ignorados) y ejemplos/
+├── docs/                # Como ejecutar, inicio automatico, pendientes
+├── herramientas/        # Utilidades (generar anclas desde capturas)
+└── automation_images/   # anchors/ · obstrucciones/ · debug/
 ```
 
 ---
@@ -204,9 +218,9 @@ VisualPilot/
 ## Notas
 
 - Todo lo que hay en `automation_images/` (imagenes, logs, capturas) y
-  `config_usuario.json` (rutas locales) **no se versiona**.
+  `config_usuario.json` (rutas locales y configuracion de reserva) **no se versiona**.
 - Los flujos personales (`reserva_csi.txt`, `onlypark.txt`) estan ignorados por git.
-- Pendiente: modo PC bloqueado / keep-awake (ver `TAREAS.md`).
+- Pendiente: modo PC bloqueado / keep-awake (ver `docs/TAREAS.md`).
 
 ---
 

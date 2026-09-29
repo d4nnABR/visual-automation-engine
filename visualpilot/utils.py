@@ -15,13 +15,20 @@ _ES_SYSTEM_REQUIRED = 0x00000001
 _ES_DISPLAY_REQUIRED = 0x00000002
 
 
+_despierto_activos = 0
+
+
 def mantener_pc_despierto(activar=True):
     """
-    Impide que Windows suspenda el sistema o apague la pantalla mientras
-    se espera una hora concreta. Devuelve True si se pudo aplicar.
+    Impide que Windows suspenda el sistema o apague la pantalla. Las llamadas
+    se anidan: la ejecución completa y cada espera piden "despierto", y solo se
+    libera cuando la última lo suelta (antes, terminar la espera de las 00:02
+    lo apagaba en plena reserva). Devuelve True si se pudo aplicar.
     """
+    global _despierto_activos
+    _despierto_activos = _despierto_activos + 1 if activar else max(0, _despierto_activos - 1)
     try:
-        if activar:
+        if _despierto_activos:
             flags = _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED | _ES_DISPLAY_REQUIRED
         else:
             flags = _ES_CONTINUOUS
@@ -69,8 +76,6 @@ def esta_bloqueado():
             user32.GetClassNameW(hwnd, clase, 256)
             if clase.value.lower() == "windows.ui.core.corewindow":
                 return True
-        elif _logonui_activo():
-            return True
 
         return _logonui_activo()
     except Exception:

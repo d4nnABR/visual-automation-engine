@@ -1,25 +1,29 @@
 import os
+import re
 import time
 import pyautogui
 import keyboard
 from datetime import datetime, timedelta
 
-from config import (
+from .config import (
     cargar_directorio_base, guardar_directorio_base,
     get_directorio_imagenes, get_directorio_debug,
     get_directorio_anchors, get_directorio_obstrucciones,
     AUTO_GUARD, ACCIONES_VALIDAS, ACCIONES_CRITICAS,
+    variables_flujo, resolver_flujo,
 )
-from utils import (
+from .utils import (
     obtener_marca_tiempo, antirrebote, parse_retraso_y_hora_siguiente,
     crear_directorios, mantener_pc_despierto, esta_bloqueado,
 )
-from logger import Logger
-from vision import seleccionar_region, capturar_imagen_referencia
-from vision_ui import cerrar_obstrucciones
-from acciones import ejecutar_accion, grabar_eventos_teclas_hasta_f12, FALLO, EXITO
+from .logger import Logger
+from .vision import seleccionar_region, capturar_imagen_referencia
+from .vision_ui import cerrar_obstrucciones
+from .acciones import ejecutar_accion, grabar_eventos_teclas_hasta_f12, FALLO, EXITO, FIN
 
 ACCIONES_FLUJO = {"LABEL", "GOTO", "RETRY", "ON_FAIL_GOTO"}
+
+_PATRON_VARIABLE = re.compile(r"\{([A-Z_]+)\}")
 
 
 class AutomatizacionVisual:
@@ -89,8 +93,12 @@ class AutomatizacionVisual:
     # ──────────────────────────────────────────────
 
     def registrar_coordenadas_visuales(self, modo="w"):
-        nombre_archivo = input("Introduce el nombre del archivo para guardar las coordenadas (incluye .txt): ")
-        ruta_archivo = os.path.join(self.directorio_base, nombre_archivo)
+        nombre_archivo = input("Nombre del flujo a grabar (incluye .txt; se guarda en flujos/): ").strip()
+        ruta_archivo = (
+            resolver_flujo(nombre_archivo, self.directorio_base) if modo == "a"
+            else os.path.join(self.directorio_base, "flujos", nombre_archivo)
+        )
+        os.makedirs(os.path.dirname(ruta_archivo), exist_ok=True)
 
         if modo == "a" and not os.path.exists(ruta_archivo):
             print(f"El archivo {ruta_archivo} no existe. Usa la opción 1 para crearlo.")
@@ -261,21 +269,19 @@ class AutomatizacionVisual:
         return etiquetas
 
     def aplicar_coordenadas_visuales(self, nombre_archivo=None):
+        """Ejecuta un flujo. Devuelve True si terminó sin errores (o por FIN)."""
         if not nombre_archivo:
-            nombre_archivo = input("Introduce el nombre del archivo con las coordenadas: ")
-        ruta_archivo = (
-            nombre_archivo if os.path.exists(nombre_archivo)
-            else os.path.join(self.directorio_base, nombre_archivo)
-        )
+            nombre_archivo = input("Nombre del flujo (se busca en flujos/): ").strip()
+        ruta_archivo = resolver_flujo(nombre_archivo, self.directorio_base)
         nombre_archivo = os.path.basename(ruta_archivo)
 
         if not os.path.exists(ruta_archivo):
             print(f"No se encontró el archivo: {ruta_archivo}")
-            return
+            return False
 
-        lineas = self.validar_y_limpiar_archivo(ruta_archivo)  # ✅ ya es lista
+        lineas = self.validar_y_limpiar_archivo(ruta_archivo)
         if not lineas:
-            return
+            return False
 
         marca_tiempo = obtener_marca_tiempo()
         ruta_log = self.logger.abrir(f"registro_ejecucion_{marca_tiempo}.txt")
@@ -292,6 +298,7 @@ class AutomatizacionVisual:
 
         contador_exitos = 0
         contador_errores = 0
+        completo = False
         total_pasos = len(lineas)
 
         print("Aplicando coordenadas visuales...")
@@ -390,12 +397,18 @@ class AutomatizacionVisual:
                         self.logger.registrar(f"Intento {intento}/{max_intentos} falló: {e}", "ERROR")
                         resultado = FALLO
 
-                    if resultado == EXITO:
+                    if resultado in (EXITO, FIN):
                         break
 
                     if intento < max_intentos:
                         self.logger.registrar(f"Reintentando ({intento}/{max_intentos - 1})...", "WARNING")
                         time.sleep(1)
+
+                if resultado == FIN:
+                    contador_exitos += 1
+                    self.logger.registrar(f"Flujo terminado por {accion}: nada más que hacer")
+                    completo = True
+                    break
 
                 if resultado == EXITO:
                     contador_exitos += 1
@@ -417,6 +430,8 @@ class AutomatizacionVisual:
                         break
                     else:
                         i += 1
+            else:
+                completo = True
 
         except KeyboardInterrupt:
             self.logger.registrar("Ejecución interrumpida por el usuario", "WARNING")
@@ -424,10 +439,12 @@ class AutomatizacionVisual:
             self.logger.registrar(f"Error crítico en ejecución: {e}", "CRITICAL")
             self.logger.capturar_pantallazo_error(0, "CRITICAL", str(e))
         finally:
+            ok = completo and contador_errores == 0
             self.logger.registrar("=" * 60)
             self.logger.registrar("RESUMEN DE EJECUCIÓN")
             self.logger.registrar(f"Exitosos: {contador_exitos}")
             self.logger.registrar(f"Errores: {contador_errores}")
+            self.logger.registrar(f"Resultado: {'OK' if ok else 'CON ERRORES / INCOMPLETO'}")
             self.logger.registrar(f"Tiempo total: {self.logger.tiempo_transcurrido:.2f} segundos")
             self.logger.registrar("=" * 60)
             self.logger.cerrar()
@@ -438,7 +455,7 @@ class AutomatizacionVisual:
             except Exception:
                 pass
 
-        print("Aplicación completada.")
+        return ok
 
     def _escribir_linea_con_hora(self, archivo_salida, accion, x, y, retraso, hora_siguiente, carga_util):
         ACCIONES_CON_RETRASO = {
@@ -448,6 +465,7 @@ class AutomatizacionVisual:
             "MAXIMIZE", "CLICK_ANCHOR", "CLICK_IF_ANCHOR", "VERIFY_ANCHOR", "GUARD",
             "CLICK_TEXT", "CLICK_IF_TEXT", "VERIFY_TEXT", "CLICK_AVAILABLE_COLOR",
             "SELECCIONAR_PARQUEO", "DROPDOWN", "SELECCIONAR_DIA", "MARCAR_1DIA",
+            "VERIFICAR_SEMANA",
         }
         if hora_siguiente:
             hora_out = hora_siguiente
@@ -481,8 +499,10 @@ class AutomatizacionVisual:
             return None
 
     def validar_y_limpiar_archivo(self, ruta_archivo):
+        """Devuelve las líneas ejecutables (con {VARIABLES} ya sustituidas) o None."""
         print("Validando archivo de coordenadas...")
         lineas_validas = []
+        variables = variables_flujo()
 
         with open(ruta_archivo, "r", encoding="utf-8") as archivo:
             for numero_linea, linea in enumerate(archivo, 1):
@@ -492,6 +512,12 @@ class AutomatizacionVisual:
 
                 if linea.lstrip().startswith("#"):
                     continue
+
+                faltantes = [v for v in _PATRON_VARIABLE.findall(linea) if v not in variables]
+                if faltantes:
+                    print(f"Línea {numero_linea} usa variables desconocidas {faltantes} (se omite): {linea}")
+                    continue
+                linea = _PATRON_VARIABLE.sub(lambda m: variables[m.group(1)], linea)
 
                 partes = linea.split(",", 4)
                 accion = partes[0].strip()
@@ -535,9 +561,10 @@ class AutomatizacionVisual:
         print(f"Archivo validado: {len(lineas_validas)} líneas listas.")
         return lineas_validas  # ✅ lista en memoria, sin .backup
 
-    def menu_validar_archivo(self):
-        nombre_archivo = input("Introduce el nombre del archivo a validar: ")
-        ruta_archivo = os.path.join(self.directorio_base, nombre_archivo)
+    def menu_validar_archivo(self, nombre_archivo=None):
+        if not nombre_archivo:
+            nombre_archivo = input("Nombre del flujo a validar (se busca en flujos/): ").strip()
+        ruta_archivo = resolver_flujo(nombre_archivo, self.directorio_base)
 
         if not os.path.exists(ruta_archivo):
             print(f"No se encontró el archivo: {ruta_archivo}")

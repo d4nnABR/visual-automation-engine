@@ -1,29 +1,76 @@
 import os
 import json
 
-# Ruta del archivo donde se guarda la configuración persistente
-_RUTA_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config_usuario.json")
+# Raíz del proyecto (carpeta que contiene main.py y el paquete visualpilot/)
+RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Directorio base por defecto (escritorio del usuario actual)
-_DIRECTORIO_BASE_DEFAULT = os.path.join(os.path.expanduser("~"), "Desktop")
+# Configuración persistente del usuario (ignorada por git). Secciones:
+#   "directorio_base": dónde están flujos, imágenes y debug
+#   "reserva": valores editables desde el menú (ver ajustes.RESERVA)
+_RUTA_CONFIG = os.path.join(RAIZ_PROYECTO, "config_usuario.json")
 
 CAPTURAR_SCREENSHOTS_ERROR = True
 
 
+def _leer_config_usuario() -> dict:
+    if not os.path.exists(_RUTA_CONFIG):
+        return {}
+    try:
+        with open(_RUTA_CONFIG, "r", encoding="utf-8") as f:
+            datos = json.load(f)
+        return datos if isinstance(datos, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _guardar_config_usuario(cambios: dict):
+    """Fusiona `cambios` con lo que ya hay en el archivo (no borra otras secciones)."""
+    datos = _leer_config_usuario()
+    datos.update(cambios)
+    with open(_RUTA_CONFIG, "w", encoding="utf-8") as f:
+        json.dump(datos, f, ensure_ascii=False, indent=2)
+
+
 def cargar_directorio_base() -> str:
-    if os.path.exists(_RUTA_CONFIG):
-        try:
-            with open(_RUTA_CONFIG, "r", encoding="utf-8") as f:
-                datos = json.load(f)
-                return datos.get("directorio_base", _DIRECTORIO_BASE_DEFAULT)
-        except (json.JSONDecodeError, KeyError):
-            pass
-    return _DIRECTORIO_BASE_DEFAULT
+    return _leer_config_usuario().get("directorio_base", RAIZ_PROYECTO)
 
 
 def guardar_directorio_base(ruta: str):
-    with open(_RUTA_CONFIG, "w", encoding="utf-8") as f:
-        json.dump({"directorio_base": ruta}, f, ensure_ascii=False, indent=2)
+    _guardar_config_usuario({"directorio_base": ruta})
+
+
+def cargar_reserva() -> dict:
+    """Valores de reserva: defaults de ajustes.RESERVA + lo guardado por el usuario."""
+    from .ajustes import RESERVA
+    cfg = dict(RESERVA)
+    cfg.update(_leer_config_usuario().get("reserva", {}))
+    return cfg
+
+
+def guardar_reserva(cfg: dict):
+    _guardar_config_usuario({"reserva": cfg})
+
+
+def variables_flujo() -> dict:
+    """Variables que un flujo .txt puede usar como {NOMBRE}."""
+    cfg = cargar_reserva()
+    return {
+        "HORA_INICIO": cfg["hora_inicio"],
+        "PRIORIDAD": cfg["prioridad"],
+        "DIAS_ANTICIPACION": str(cfg["dias_anticipacion"]),
+    }
+
+
+def resolver_flujo(archivo: str, directorio_base: str) -> str:
+    """Ruta de un flujo: tal cual si existe; si no, en <base>/flujos/ o en <base>/."""
+    for ruta in (
+        archivo,
+        os.path.join(directorio_base, "flujos", archivo),
+        os.path.join(directorio_base, archivo),
+    ):
+        if os.path.exists(ruta):
+            return ruta
+    return os.path.join(directorio_base, "flujos", archivo)
 
 
 def get_directorio_imagenes(directorio_base: str) -> str:
@@ -55,6 +102,8 @@ ACCIONES_VALIDAS = [
     "SELECCIONAR_DIA",
     # Marcar el checkbox "1 Día"
     "MARCAR_1DIA",
+    # Termina el flujo sin error si la fecha a reservar cae en semana libre
+    "VERIFICAR_SEMANA",
 ]
 
 # Si una de estas acciones falla (y no hay ON_FAIL_GOTO), se detiene el flujo.

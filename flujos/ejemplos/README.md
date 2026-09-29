@@ -14,9 +14,9 @@ particular**. Sustituye textos y coordenadas por los de tu aplicación.
    con el grabador del menú, tecla `g`) y las de cierre de avisos en
    `automation_images/obstrucciones/` (tecla `o`).
 2. **Escribe tu `.txt`** usando el catálogo de acciones del `README` principal.
-3. **Calibra** las coordenadas que uses (`config`/`ajustes.py`) a tu ventana
+3. **Calibra** las coordenadas que uses (`visualpilot/ajustes.py`) a tu ventana
    MAXIMIZADA con la resolución/zoom fijos.
-4. Ejecuta: `python main.py run mi_flujo.txt` (detén con **ESC**).
+4. Ejecuta: `python main.py run mi_flujo.txt` (se busca en `flujos/`) (detén con **ESC**).
 
 ## Anonimización
 
