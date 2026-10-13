@@ -11,6 +11,8 @@ from .config import (
     get_directorio_anchors, get_directorio_obstrucciones,
     AUTO_GUARD, ACCIONES_VALIDAS, ACCIONES_CRITICAS,
     variables_flujo, resolver_flujo,
+    MAX_INTENTOS_RESERVA, TEXTO_CONFIRMACION_RESERVA,
+    ESPERA_CONFIRMACION_RESERVA, ESPERA_ENTRE_INTENTOS, HISTORIAL_RESERVAS,
 )
 from .utils import (
     obtener_marca_tiempo, antirrebote, parse_retraso_y_hora_siguiente,
@@ -18,10 +20,19 @@ from .utils import (
 )
 from .logger import Logger
 from .vision import seleccionar_region, capturar_imagen_referencia
-from .vision_ui import cerrar_obstrucciones
+from .vision_ui import cerrar_obstrucciones, cerrar_aplicacion, encontrar_check_verde
+from .ocr import buscar_texto
 from .acciones import ejecutar_accion, grabar_eventos_teclas_hasta_f12, FALLO, EXITO, FIN
 
 ACCIONES_FLUJO = {"LABEL", "GOTO", "RETRY", "ON_FAIL_GOTO"}
+
+# Estado final de una ejecución (AutomatizacionVisual.ultimo_estado)
+CONFIRMADA = "confirmada"        # se vio "Se ha reservado!" + check verde
+SIN_CONFIRMAR = "sin_confirmar"  # el flujo terminó pero no apareció la confirmación
+SEMANA_LIBRE = "semana_libre"    # terminó por FIN: no tocaba reservar
+OK = "ok"                        # terminó sin errores (sin verificación de reserva)
+CON_ERRORES = "con_errores"
+CANCELADA = "cancelada"          # ESC / Ctrl+C: no se reintenta
 
 _PATRON_VARIABLE = re.compile(r"\{([A-Z_]+)\}")
 
@@ -34,6 +45,7 @@ class AutomatizacionVisual:
         crear_directorios(self.directorio_imagenes, self.directorio_debug)
         self._crear_subdirectorios()
         self.logger = Logger(self.directorio_debug)
+        self.ultimo_estado = None
 
     def _esperar_desbloqueo(self):
         """No envía entrada si la estación está bloqueada (evita teclear en la
@@ -268,8 +280,13 @@ class AutomatizacionVisual:
                 etiquetas[nombre] = i
         return etiquetas
 
-    def aplicar_coordenadas_visuales(self, nombre_archivo=None):
-        """Ejecuta un flujo. Devuelve True si terminó sin errores (o por FIN)."""
+    def aplicar_coordenadas_visuales(self, nombre_archivo=None, verificar_reserva=False, encabezado=None):
+        """
+        Ejecuta un flujo. Devuelve True si terminó sin errores (o por FIN).
+        Deja el detalle en `self.ultimo_estado`. Con `verificar_reserva`, al final
+        exige ver la confirmación ("Se ha reservado!" + check verde) para dar OK.
+        """
+        self.ultimo_estado = CON_ERRORES
         if not nombre_archivo:
             nombre_archivo = input("Nombre del flujo (se busca en flujos/): ").strip()
         ruta_archivo = resolver_flujo(nombre_archivo, self.directorio_base)
@@ -288,6 +305,8 @@ class AutomatizacionVisual:
         self.logger.registrar("=" * 60)
         self.logger.registrar("INICIO DE EJECUCIÓN DE AUTOMATIZACIÓN")
         self.logger.registrar(f"Archivo: {nombre_archivo}")
+        if encabezado:
+            self.logger.registrar(encabezado)
         self.logger.registrar("=" * 60)
 
         ruta_txt_con_horas = os.path.join(
@@ -299,6 +318,8 @@ class AutomatizacionVisual:
         contador_exitos = 0
         contador_errores = 0
         completo = False
+        por_fin = False
+        cancelada = False
         total_pasos = len(lineas)
 
         print("Aplicando coordenadas visuales...")
@@ -316,6 +337,7 @@ class AutomatizacionVisual:
                 if keyboard.is_pressed("esc"):
                     antirrebote("esc")
                     self.logger.registrar("Ejecución detenida por el usuario", "WARNING")
+                    cancelada = True
                     break
 
                 linea = lineas[i].strip()
@@ -408,6 +430,7 @@ class AutomatizacionVisual:
                     contador_exitos += 1
                     self.logger.registrar(f"Flujo terminado por {accion}: nada más que hacer")
                     completo = True
+                    por_fin = True
                     break
 
                 if resultado == EXITO:
@@ -433,13 +456,26 @@ class AutomatizacionVisual:
             else:
                 completo = True
 
+            if verificar_reserva and completo and not por_fin and contador_errores == 0:
+                if not self._confirmar_reserva():
+                    contador_errores += 1
+
         except KeyboardInterrupt:
             self.logger.registrar("Ejecución interrumpida por el usuario", "WARNING")
+            cancelada = True
         except Exception as e:
             self.logger.registrar(f"Error crítico en ejecución: {e}", "CRITICAL")
             self.logger.capturar_pantallazo_error(0, "CRITICAL", str(e))
         finally:
             ok = completo and contador_errores == 0
+            if cancelada:
+                self.ultimo_estado = CANCELADA
+            elif ok and por_fin:
+                self.ultimo_estado = SEMANA_LIBRE
+            elif ok:
+                self.ultimo_estado = CONFIRMADA if verificar_reserva else OK
+            elif verificar_reserva and completo:
+                self.ultimo_estado = SIN_CONFIRMAR
             self.logger.registrar("=" * 60)
             self.logger.registrar("RESUMEN DE EJECUCIÓN")
             self.logger.registrar(f"Exitosos: {contador_exitos}")
@@ -456,6 +492,84 @@ class AutomatizacionVisual:
                 pass
 
         return ok
+
+    # ──────────────────────────────────────────────
+    # RESERVA CON CONFIRMACIÓN VISUAL Y REINTENTOS
+    # ──────────────────────────────────────────────
+
+    def _confirmar_reserva(self):
+        """
+        La reserva solo cuenta si en pantalla están a la vez el texto
+        "Se ha reservado" y el círculo verde con el check. Deja la captura en
+        debug/ como evidencia (CONFIRMACION_OK_* o CONFIRMACION_FALTA_*).
+        """
+        self.logger.registrar("Verificando confirmación visual de la reserva...")
+        texto = check = None
+        limite = time.time() + ESPERA_CONFIRMACION_RESERVA
+        while time.time() < limite:
+            texto = texto or buscar_texto(TEXTO_CONFIRMACION_RESERVA)
+            check = check or encontrar_check_verde()
+            if texto and check:
+                break
+            time.sleep(1)
+
+        confirmada = bool(texto and check)
+        nombre = f"CONFIRMACION_{'OK' if confirmada else 'FALTA'}_{obtener_marca_tiempo()}.png"
+        try:
+            pyautogui.screenshot().save(os.path.join(self.directorio_debug, nombre))
+        except Exception as e:
+            self.logger.registrar(f"No se pudo guardar la captura de confirmación: {e}", "WARNING")
+            nombre = "(sin captura)"
+
+        if confirmada:
+            self.logger.registrar(
+                f"RESERVA CONFIRMADA: texto '{texto['texto']}' y check verde en "
+                f"({check['x']}, {check['y']}). Captura: {nombre}"
+            )
+        else:
+            faltan = [n for n, v in (("texto", texto), ("check verde", check)) if not v]
+            self.logger.registrar(
+                f"Reserva SIN confirmar: no se vio {' ni '.join(faltan)}. Captura: {nombre}", "ERROR"
+            )
+        return confirmada
+
+    def _anotar_historial(self, nombre_archivo, intento, max_intentos, estado):
+        ruta = os.path.join(self.directorio_debug, HISTORIAL_RESERVAS)
+        marca = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with open(ruta, "a", encoding="utf-8") as f:
+                f.write(f"[{marca}] {nombre_archivo} intento {intento}/{max_intentos}: {estado}\n")
+        except OSError:
+            pass
+
+    def reservar_con_reintentos(self, nombre_archivo, max_intentos=MAX_INTENTOS_RESERVA):
+        """
+        Ejecuta el flujo de reserva hasta lograr la confirmación visual, como
+        máximo `max_intentos` veces (lo que pase primero). Entre intentos cierra
+        la app para que el siguiente empiece desde cero (el flujo la relanza).
+        No reintenta si fue semana libre o si el usuario canceló.
+        """
+        for intento in range(1, max_intentos + 1):
+            encabezado = f"INTENTO {intento}/{max_intentos}"
+            self.aplicar_coordenadas_visuales(
+                nombre_archivo, verificar_reserva=True, encabezado=encabezado,
+            )
+            estado = self.ultimo_estado
+            self._anotar_historial(nombre_archivo, intento, max_intentos, estado)
+            print(f"\n>>> {encabezado}: {estado}")
+
+            if estado in (CONFIRMADA, SEMANA_LIBRE):
+                return True
+            if estado == CANCELADA:
+                print(">>> Cancelado por el usuario: no se reintenta.")
+                return False
+            if intento < max_intentos:
+                print(f">>> Sin confirmación: se cierra Power Apps y se reintenta en {ESPERA_ENTRE_INTENTOS}s")
+                cerrar_aplicacion(logger=self.logger)
+                time.sleep(ESPERA_ENTRE_INTENTOS)
+
+        print(f">>> No se logró confirmar la reserva tras {max_intentos} intentos.")
+        return False
 
     def _escribir_linea_con_hora(self, archivo_salida, accion, x, y, retraso, hora_siguiente, carga_util):
         ACCIONES_CON_RETRASO = {

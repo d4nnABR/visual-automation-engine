@@ -11,7 +11,7 @@ from .core import AutomatizacionVisual
 from .ajustes import DIAS_SEMANA
 from . import reserva as regla
 
-USO = "Uso: python main.py [run|validate] <flujo.txt>"
+USO = "Uso: python main.py [run|reservar|validate] <flujo.txt>"
 
 
 # ──────────────────────────────────────────────
@@ -29,6 +29,12 @@ def cli(args):
 
     if comando in ("run", "ejecutar"):
         return 0 if auto.aplicar_coordenadas_visuales(archivo) else 1
+
+    if comando in ("reservar", "reserva"):
+        if not archivo:
+            print(USO)
+            return 2
+        return 0 if auto.reservar_con_reintentos(archivo) else 1
 
     if comando in ("validate", "validar"):
         if not archivo:
@@ -166,7 +172,7 @@ def configurar_reserva():
 
 _CLAVES_LOG = (
     "Fecha objetivo", "seleccionado", "SELECCIONADO", "semana libre", "toca reservar",
-    "Se ha reservado", "[WARNING]", "[ERROR]", "[CRITICAL]",
+    "Se ha reservado", "INTENTO", "RESERVA CONFIRMADA", "SIN confirmar", "[WARNING]", "[ERROR]", "[CRITICAL]",
     "Exitosos:", "Errores:", "Resultado:", "Tiempo total:",
 )
 
@@ -230,6 +236,7 @@ def menu():
     auto = AutomatizacionVisual()
     opciones = {
         "1": ("Ejecutar un flujo",                     lambda: auto.aplicar_coordenadas_visuales()),
+        "r": ("Reservar con reintentos (reserva_csi.txt)", lambda: auto.reservar_con_reintentos("reserva_csi.txt")),
         "2": ("Configurar reserva (hora, fecha, semanas, parqueos)", configurar_reserva),
         "3": ("Ver último log",                        lambda: ver_ultimo_log(auto.directorio_debug)),
         "4": ("Limpiar debug (logs y capturas viejas)", lambda: limpiar_debug(auto.directorio_debug)),

@@ -15,6 +15,7 @@ TITULO_VENTANA_DEFECTO = "Power Apps"
 
 _SW_RESTORE = 9
 _SW_MAXIMIZE = 3
+_WM_CLOSE = 0x0010
 
 
 def _capturar(region=None):
@@ -130,6 +131,31 @@ def hay_color_naranja(region, minimo=15):
     return int(mascara.sum()) >= minimo
 
 
+def encontrar_check_verde(region=None, area_min=3000):
+    """
+    Busca el círculo verde del "Se ha reservado!" (verde saturado, ~#22B800).
+    Exige forma redonda (relleno ~ pi/4 de su caja y proporción ~1:1) para no
+    confundirlo con otros elementos verdes. Devuelve {x, y, w, h} o None.
+    """
+    imagen = _capturar(region)
+    hsv = cv2.cvtColor(imagen, cv2.COLOR_BGR2HSV)
+    mascara = cv2.inRange(hsv, (40, 150, 120), (80, 255, 255))
+    contornos, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    off_x = region[0] if region else 0
+    off_y = region[1] if region else 0
+    for c in sorted(contornos, key=cv2.contourArea, reverse=True):
+        area = cv2.contourArea(c)
+        if area < area_min:
+            break
+        x, y, w, h = cv2.boundingRect(c)
+        proporcion = w / float(h)
+        relleno = area / float(w * h)
+        if 0.8 <= proporcion <= 1.25 and 0.65 <= relleno <= 0.9:
+            return {"x": x + off_x + w // 2, "y": y + off_y + h // 2, "w": w, "h": h}
+    return None
+
+
 def encontrar_bloques_amarillos(region, area_min=300, area_max=4000):
     imagen = _capturar(region)
     hsv = cv2.cvtColor(imagen, cv2.COLOR_BGR2HSV)
@@ -226,6 +252,54 @@ def maximizar_ventana(titulo=TITULO_VENTANA_DEFECTO, logger=None):
     if logger:
         logger.registrar(f"Ventana maximizada (HWND {hwnd}): '{ventana.title}'")
     return True
+
+
+def _proceso_activo(imagen):
+    import subprocess
+    try:
+        salida = subprocess.run(
+            ["tasklist", "/FI", f"IMAGENAME eq {imagen}"],
+            capture_output=True, text=True, creationflags=0x08000000,
+        )
+        return imagen.lower() in salida.stdout.lower()
+    except Exception:
+        return False
+
+
+def cerrar_aplicacion(titulo=TITULO_VENTANA_DEFECTO, proceso="PowerAppsNative.Generic.exe",
+                      espera=15, logger=None):
+    """
+    Cierra la app para volver a empezar limpio: WM_CLOSE a las ventanas cuyo
+    título sea exactamente `titulo` y, si el proceso sigue vivo tras `espera`
+    segundos, lo termina con taskkill. Devuelve True si quedó cerrada.
+    """
+    import subprocess
+    user32 = ctypes.windll.user32
+    ventanas = [v for v in gw.getAllWindows() if (v.title or "").strip().lower() == titulo.lower()]
+    for v in ventanas:
+        hwnd = getattr(v, "_hWnd", None)
+        if hwnd:
+            user32.PostMessageW(hwnd, _WM_CLOSE, 0, 0)
+    if logger:
+        logger.registrar(f"Cerrando '{titulo}' ({len(ventanas)} ventana(s))")
+
+    limite = time.time() + espera
+    while time.time() < limite and _proceso_activo(proceso):
+        time.sleep(1)
+
+    if _proceso_activo(proceso):
+        subprocess.run(
+            ["taskkill", "/IM", proceso, "/F"],
+            capture_output=True, creationflags=0x08000000,
+        )
+        time.sleep(2)
+        if logger:
+            logger.registrar(f"{proceso} no cerró solo; terminado con taskkill", "WARNING")
+
+    cerrada = not _proceso_activo(proceso)
+    if logger and not cerrada:
+        logger.registrar(f"No se pudo cerrar {proceso}", "ERROR")
+    return cerrada
 
 
 def cerrar_obstrucciones(directorio_obstrucciones, confianza=0.85, escalas=None, logger=None):

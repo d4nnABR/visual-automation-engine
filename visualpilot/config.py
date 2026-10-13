@@ -111,6 +111,15 @@ ACCIONES_VALIDAS = [
 # reservaría la fecha equivocada.
 ACCIONES_CRITICAS = {"SELECCIONAR_DIA"}
 
+# Reserva con reintentos (`python main.py reservar ...`): una reserva solo cuenta
+# como hecha si se ve "Se ha reservado!" con el check verde. Si no, se cierra la
+# app y se repite el flujo completo hasta MAX_INTENTOS_RESERVA veces.
+MAX_INTENTOS_RESERVA = 5
+TEXTO_CONFIRMACION_RESERVA = "Se ha reservado"
+ESPERA_CONFIRMACION_RESERVA = 20   # segundos buscando la confirmación al final
+ESPERA_ENTRE_INTENTOS = 10         # segundos tras cerrar la app antes de relanzar
+HISTORIAL_RESERVAS = "historial_reservas.log"  # una línea por intento, en debug/
+
 # Tiempo máximo (segundos) que CLICK_IF_IMAGE busca la imagen antes de continuar.
 CLICK_IF_IMAGE_TIMEOUT = 2.0
 
