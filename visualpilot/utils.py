@@ -180,3 +180,41 @@ def crear_directorios(directorio_imagenes, directorio_debug):
     if not os.path.exists(directorio_debug):
         os.makedirs(directorio_debug)
         print(f"Directorio de debug creado: {directorio_debug}")
+
+
+# ──────────────────────────────────────────────
+# UNA SOLA EJECUCIÓN A LA VEZ
+# ──────────────────────────────────────────────
+
+_NOMBRE_MUTEX = "Local\VisualPilot_ejecucion"
+_ERROR_ALREADY_EXISTS = 183
+_mutex = None
+
+
+def tomar_instancia_unica():
+    """
+    Toma un mutex con nombre de Windows. Devuelve False si otra ejecución de
+    VisualPilot ya lo tiene (no hay que arrancar otra encima). Windows lo libera
+    solo al terminar el proceso, aunque se cierre de golpe: nunca queda colgado.
+    """
+    global _mutex
+    if _mutex:
+        return True
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+    handle = kernel32.CreateMutexW(None, False, _NOMBRE_MUTEX)
+    if not handle:
+        return True  # sin mutex no se puede comprobar; mejor no bloquear la reserva
+    if kernel32.GetLastError() == _ERROR_ALREADY_EXISTS:
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+        return False
+    _mutex = handle
+    return True
+
+
+def soltar_instancia_unica():
+    """Libera el mutex (el menú lo suelta al terminar cada flujo)."""
+    global _mutex
+    if _mutex:
+        ctypes.windll.kernel32.CloseHandle(ctypes.c_void_p(_mutex))
+        _mutex = None

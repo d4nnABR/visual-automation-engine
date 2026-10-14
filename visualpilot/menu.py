@@ -10,8 +10,29 @@ from .config import cargar_reserva, guardar_reserva, resolver_flujo
 from .core import AutomatizacionVisual
 from .ajustes import DIAS_SEMANA
 from . import reserva as regla
+from .utils import tomar_instancia_unica, soltar_instancia_unica
 
 USO = "Uso: python main.py [run|reservar|validate] <flujo.txt>"
+
+YA_EN_EJECUCION = "Ya hay otra ejecución de VisualPilot en curso: esta no se inicia."
+
+
+def _avisar_ya_en_ejecucion():
+    marca = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{marca}] [WARNING] {YA_EN_EJECUCION}")
+
+
+def _una_sola(funcion):
+    """Ejecuta `funcion` solo si no hay otra ejecución de flujo en curso. Suelta
+    el candado al terminar: el menú abierto sin hacer nada no debe bloquear la
+    tarea programada."""
+    if not tomar_instancia_unica():
+        _avisar_ya_en_ejecucion()
+        return None
+    try:
+        return funcion()
+    finally:
+        soltar_instancia_unica()
 
 
 # ──────────────────────────────────────────────
@@ -25,6 +46,13 @@ def cli(args):
 
     comando = args[0].lower()
     archivo = args[1] if len(args) > 1 else None
+
+    # Otra ejecución en curso (p. ej. la tarea de las 23:58 y un auto.bat al
+    # encender el PC): no se arranca encima. Sale con 0 porque no es un error.
+    if comando in ("run", "ejecutar", "reservar", "reserva") and not tomar_instancia_unica():
+        _avisar_ya_en_ejecucion()
+        return 0
+
     auto = AutomatizacionVisual()
 
     if comando in ("run", "ejecutar"):
@@ -235,8 +263,8 @@ def limpiar_debug(directorio_debug):
 def menu():
     auto = AutomatizacionVisual()
     opciones = {
-        "1": ("Ejecutar un flujo",                     lambda: auto.aplicar_coordenadas_visuales()),
-        "r": ("Reservar con reintentos (reserva_csi.txt)", lambda: auto.reservar_con_reintentos("reserva_csi.txt")),
+        "1": ("Ejecutar un flujo",                     lambda: _una_sola(auto.aplicar_coordenadas_visuales)),
+        "r": ("Reservar con reintentos (reserva_csi.txt)", lambda: _una_sola(lambda: auto.reservar_con_reintentos("reserva_csi.txt"))),
         "2": ("Configurar reserva (hora, fecha, semanas, parqueos)", configurar_reserva),
         "3": ("Ver último log",                        lambda: ver_ultimo_log(auto.directorio_debug)),
         "4": ("Limpiar debug (logs y capturas viejas)", lambda: limpiar_debug(auto.directorio_debug)),

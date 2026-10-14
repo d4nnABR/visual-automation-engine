@@ -58,6 +58,16 @@ desencadenador "Al iniciar sesión".
 
 Puede estar **bloqueado por política de TI**.
 
+### Una sola ejecución a la vez
+
+Se puede lanzar `auto.bat` desde varios lados (la tarea de las 23:58, un acceso
+al encender el PC, a mano): `run` y `reservar` toman un mutex de Windows
+(`Local\VisualPilot_ejecucion`). Si ya hay una ejecución en curso, la nueva
+**no se inicia**: escribe "Ya hay otra ejecución de VisualPilot en curso" en
+`reserva_bat.log` y sale con 0. El mutex se libera solo al terminar el proceso
+(aunque se cierre de golpe), así que nunca queda bloqueado. El menú abierto sin
+ejecutar nada no bloquea la tarea.
+
 ### Por qué la tarea "no se lanza" (evento 332)
 
 Con "Ejecutar solo cuando el usuario haya iniciado sesión", si a las 23:58 **no
