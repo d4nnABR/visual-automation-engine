@@ -79,3 +79,51 @@ def nombre_mes(fecha):
 
 def nombre_dia(fecha):
     return DIAS_SEMANA[fecha.weekday()]
+
+
+def fecha_del_ciclo(ahora=None, hora_inicio=None, ventana_max_horas=12):
+    """
+    Día en que corre la reserva que toca (la de la próxima hora de inicio).
+    Mismo criterio que WAIT_UNTIL: a las 23:58 la de 00:02 es la de MAÑANA;
+    a las 08:00 (las 00:02 quedaron atrás hace más de 12 h) es la de HOY.
+    """
+    ahora = ahora or datetime.now()
+    hora_inicio = hora_inicio or cargar_reserva()["hora_inicio"]
+    inicio = datetime.combine(ahora.date(), datetime.strptime(hora_inicio, "%H:%M:%S").time())
+    if inicio <= ahora:
+        inicio += timedelta(days=1)
+    if (inicio - ahora).total_seconds() > ventana_max_horas * 3600:
+        inicio -= timedelta(days=1)
+    return inicio.date()
+
+
+def buscar_log_exitoso(directorio_debug, fecha_objetivo, dias_atras=15):
+    """
+    Ruta del primer registro_ejecucion_*.txt que terminó en "Resultado: OK" para
+    `fecha_objetivo` (reservada o semana libre), o None. Solo mira los logs de
+    los últimos `dias_atras` días.
+    """
+    import os
+    import re
+    import time
+
+    patron = re.compile(rf"Fecha (objetivo: )?{fecha_objetivo.isoformat()}\b")
+    limite = time.time() - dias_atras * 86400
+    try:
+        nombres = sorted(os.listdir(directorio_debug), reverse=True)
+    except OSError:
+        return None
+    for nombre in nombres:
+        if not (nombre.startswith("registro_ejecucion_") and nombre.endswith(".txt")):
+            continue
+        ruta = os.path.join(directorio_debug, nombre)
+        if os.path.getmtime(ruta) < limite:
+            continue
+        try:
+            with open(ruta, encoding="utf-8", errors="replace") as f:
+                contenido = f.read()
+        except OSError:
+            continue
+        if "Resultado: OK" in contenido and patron.search(contenido):
+            return ruta
+    return None

@@ -22,6 +22,7 @@ from .logger import Logger
 from .vision import seleccionar_region, capturar_imagen_referencia
 from .vision_ui import cerrar_obstrucciones, cerrar_aplicacion, encontrar_check_verde
 from .ocr import buscar_texto
+from .reserva import buscar_log_exitoso
 from .acciones import ejecutar_accion, grabar_eventos_teclas_hasta_f12, FALLO, EXITO, FIN
 
 ACCIONES_FLUJO = {"LABEL", "GOTO", "RETRY", "ON_FAIL_GOTO"}
@@ -570,6 +571,24 @@ class AutomatizacionVisual:
 
         print(f">>> No se logró confirmar la reserva tras {max_intentos} intentos.")
         return False
+
+    def reservar_si_falta(self, nombre_archivo, max_intentos=MAX_INTENTOS_RESERVA):
+        """
+        Para el arranque al encender el PC: si ya hay un log exitoso para la
+        fecha que toca reservar, no se lanza; si no, reserva con reintentos.
+        """
+        from .reserva import fecha_del_ciclo, calcular_fecha_objetivo
+        objetivo = calcular_fecha_objetivo(fecha_del_ciclo())
+        log_ok = buscar_log_exitoso(self.directorio_debug, objetivo)
+        marca = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if log_ok:
+            print(f"[{marca}] [INFO] Ya hay un log exitoso para {objetivo.isoformat()} "
+                  f"({os.path.basename(log_ok)}): no se lanza.")
+            self._anotar_historial(nombre_archivo, 0, max_intentos,
+                                   f"omitida, ya OK para {objetivo.isoformat()}")
+            return True
+        print(f"[{marca}] [INFO] Sin log exitoso para {objetivo.isoformat()}: se lanza la reserva.")
+        return self.reservar_con_reintentos(nombre_archivo, max_intentos)
 
     def _escribir_linea_con_hora(self, archivo_salida, accion, x, y, retraso, hora_siguiente, carga_util):
         ACCIONES_CON_RETRASO = {

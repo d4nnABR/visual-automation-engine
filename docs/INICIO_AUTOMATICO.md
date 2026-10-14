@@ -58,6 +58,18 @@ desencadenador "Al iniciar sesión".
 
 Puede estar **bloqueado por política de TI**.
 
+### Al encender el PC: `auto_inicio.bat` (solo si falta)
+
+`auto_inicio.bat` ejecuta `main.py reservar_si_falta reserva_csi.txt`: busca en
+`automation_images\debug` un `registro_ejecucion_*.txt` con **"Resultado: OK"**
+para la fecha que toca reservar. Si lo hay, **no se lanza** (lo anota en
+`reserva_bat.log` e `historial_reservas.log`); si no, reserva como `auto.bat`.
+
+La fecha que toca sigue la misma regla que `WAIT_UNTIL`: a las 23:58 es la
+reserva de las 00:02 de **mañana**; por la mañana (las 00:02 quedaron atrás) es
+la de **hoy**. Úsalo para el arranque ("Al iniciar sesión" o la carpeta Inicio);
+para la tarea de las 23:58 sigue usando `auto.bat`.
+
 ### Una sola ejecución a la vez
 
 Se puede lanzar `auto.bat` desde varios lados (la tarea de las 23:58, un acceso

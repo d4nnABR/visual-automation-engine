@@ -12,7 +12,7 @@ from .ajustes import DIAS_SEMANA
 from . import reserva as regla
 from .utils import tomar_instancia_unica, soltar_instancia_unica
 
-USO = "Uso: python main.py [run|reservar|validate] <flujo.txt>"
+USO = "Uso: python main.py [run|reservar|reservar_si_falta|validate] <flujo.txt>"
 
 YA_EN_EJECUCION = "Ya hay otra ejecución de VisualPilot en curso: esta no se inicia."
 
@@ -49,7 +49,7 @@ def cli(args):
 
     # Otra ejecución en curso (p. ej. la tarea de las 23:58 y un auto.bat al
     # encender el PC): no se arranca encima. Sale con 0 porque no es un error.
-    if comando in ("run", "ejecutar", "reservar", "reserva") and not tomar_instancia_unica():
+    if comando in ("run", "ejecutar", "reservar", "reserva", "reservar_si_falta")             and not tomar_instancia_unica():
         _avisar_ya_en_ejecucion()
         return 0
 
@@ -63,6 +63,12 @@ def cli(args):
             print(USO)
             return 2
         return 0 if auto.reservar_con_reintentos(archivo) else 1
+
+    if comando == "reservar_si_falta":
+        if not archivo:
+            print(USO)
+            return 2
+        return 0 if auto.reservar_si_falta(archivo) else 1
 
     if comando in ("validate", "validar"):
         if not archivo:
