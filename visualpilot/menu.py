@@ -10,9 +10,12 @@ from .config import cargar_reserva, guardar_reserva, resolver_flujo
 from .core import AutomatizacionVisual
 from .ajustes import DIAS_SEMANA
 from . import reserva as regla
-from .utils import tomar_instancia_unica, soltar_instancia_unica
+from .utils import tomar_instancia_unica, soltar_instancia_unica, senal_scroll_lock, esta_bloqueado
+from .config import SENAL_SCROLL_LOCK_AL_INICIAR
 
 USO = "Uso: python main.py [run|reservar|reservar_si_falta|validate] <flujo.txt>"
+
+COMANDOS_EJECUCION = ("run", "ejecutar", "reservar", "reserva", "reservar_si_falta")
 
 YA_EN_EJECUCION = "Ya hay otra ejecución de VisualPilot en curso: esta no se inicia."
 
@@ -20,6 +23,16 @@ YA_EN_EJECUCION = "Ya hay otra ejecución de VisualPilot en curso: esta no se in
 def _avisar_ya_en_ejecucion():
     marca = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{marca}] [WARNING] {YA_EN_EJECUCION}")
+
+
+def _enviar_senal_inicio():
+    """Scroll Lock x2 al arrancar (aviso a la automatización de login)."""
+    marca = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    bloqueada = esta_bloqueado()
+    enviada = senal_scroll_lock()
+    nota = " (estación bloqueada: puede no llegar)" if bloqueada else ""
+    print(f"[{marca}] [INFO] Señal Scroll Lock al iniciar: "
+          f"{'enviada' if enviada else 'NO enviada'}{nota}")
 
 
 def _una_sola(funcion):
@@ -47,9 +60,12 @@ def cli(args):
     comando = args[0].lower()
     archivo = args[1] if len(args) > 1 else None
 
+    if SENAL_SCROLL_LOCK_AL_INICIAR and comando in COMANDOS_EJECUCION:
+        _enviar_senal_inicio()
+
     # Otra ejecución en curso (p. ej. la tarea de las 23:58 y un auto.bat al
     # encender el PC): no se arranca encima. Sale con 0 porque no es un error.
-    if comando in ("run", "ejecutar", "reservar", "reserva", "reservar_si_falta")             and not tomar_instancia_unica():
+    if comando in COMANDOS_EJECUCION and not tomar_instancia_unica():
         _avisar_ya_en_ejecucion()
         return 0
 

@@ -218,3 +218,30 @@ def soltar_instancia_unica():
     if _mutex:
         ctypes.windll.kernel32.CloseHandle(ctypes.c_void_p(_mutex))
         _mutex = None
+
+
+# ──────────────────────────────────────────────
+# SEÑAL DE INICIO (Scroll Lock)
+# ──────────────────────────────────────────────
+
+_VK_SCROLL = 0x91
+_KEYEVENTF_KEYUP = 0x0002
+
+
+def senal_scroll_lock(pausa=1.5):
+    """
+    Pulsa Scroll Lock, espera `pausa` s y lo vuelve a pulsar (el LED queda como
+    estaba). Avisa a la automatización de login de que la sesión ya entró. Se
+    envía desde este proceso (sin lanzar PowerShell oculto). Devuelve True si se
+    pudo enviar.
+    """
+    try:
+        user32 = ctypes.windll.user32
+        for i in range(2):
+            user32.keybd_event(_VK_SCROLL, 0x46, 0, 0)
+            user32.keybd_event(_VK_SCROLL, 0x46, _KEYEVENTF_KEYUP, 0)
+            if i == 0:
+                time.sleep(pausa)
+        return True
+    except Exception:
+        return False

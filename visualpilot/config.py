@@ -120,6 +120,10 @@ ESPERA_CONFIRMACION_RESERVA = 20   # segundos buscando la confirmación al final
 ESPERA_ENTRE_INTENTOS = 10         # segundos tras cerrar la app antes de relanzar
 HISTORIAL_RESERVAS = "historial_reservas.log"  # una línea por intento, en debug/
 
+# Al arrancar run/reservar/reservar_si_falta se pulsa Scroll Lock dos veces
+# (1,5 s entre ambas) para avisar a la automatización de login de que ya entró.
+SENAL_SCROLL_LOCK_AL_INICIAR = True
+
 # Tiempo máximo (segundos) que CLICK_IF_IMAGE busca la imagen antes de continuar.
 CLICK_IF_IMAGE_TIMEOUT = 2.0
 
