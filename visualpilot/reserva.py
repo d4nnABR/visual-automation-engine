@@ -97,17 +97,46 @@ def fecha_del_ciclo(ahora=None, hora_inicio=None, ventana_max_horas=12):
     return inicio.date()
 
 
+_FECHA_EN_LOG = r"Fecha (?:objetivo: )?(\d{4}-\d{2}-\d{2})"
+_EVIDENCIA_RESERVA = (
+    "RESERVA CONFIRMADA",                  # verificación visual (reservar)
+    "Texto encontrado: 'Se ha reservado'",  # logs anteriores a la verificación
+    "cae en semana libre",                 # no tocaba reservar: también es OK
+)
+
+
+def log_exitoso_para(contenido, fecha_objetivo):
+    """
+    True si el log COMPLETO de una ejecución prueba que `fecha_objetivo` quedó
+    resuelta. Exige las cuatro cosas, para no tomar por buena una reserva de
+    otro día ni un log que otro proceso todavía está escribiendo:
+      1. el log está terminado (tiene el RESUMEN DE EJECUCIÓN);
+      2. la ÚLTIMA línea "Resultado:" es OK;
+      3. todas las fechas que menciona son `fecha_objetivo` (ninguna otra);
+      4. hay evidencia de reserva (confirmación / "Se ha reservado" / semana libre).
+    """
+    import re
+
+    if "RESUMEN DE EJECUCIÓN" not in contenido:
+        return False
+    resultados = [l for l in contenido.splitlines() if "Resultado:" in l]
+    if not resultados or "Resultado: OK" not in resultados[-1]:
+        return False
+    fechas = set(re.findall(_FECHA_EN_LOG, contenido))
+    if fechas != {fecha_objetivo.isoformat()}:
+        return False
+    return any(e in contenido for e in _EVIDENCIA_RESERVA)
+
+
 def buscar_log_exitoso(directorio_debug, fecha_objetivo, dias_atras=15):
     """
-    Ruta del primer registro_ejecucion_*.txt que terminó en "Resultado: OK" para
-    `fecha_objetivo` (reservada o semana libre), o None. Solo mira los logs de
-    los últimos `dias_atras` días.
+    Ruta del registro_ejecucion_*.txt más reciente que prueba (leído entero, ver
+    `log_exitoso_para`) que `fecha_objetivo` ya quedó reservada o era semana
+    libre, o None. Solo mira los logs de los últimos `dias_atras` días.
     """
     import os
-    import re
     import time
 
-    patron = re.compile(rf"Fecha (objetivo: )?{fecha_objetivo.isoformat()}\b")
     limite = time.time() - dias_atras * 86400
     try:
         nombres = sorted(os.listdir(directorio_debug), reverse=True)
@@ -117,13 +146,61 @@ def buscar_log_exitoso(directorio_debug, fecha_objetivo, dias_atras=15):
         if not (nombre.startswith("registro_ejecucion_") and nombre.endswith(".txt")):
             continue
         ruta = os.path.join(directorio_debug, nombre)
-        if os.path.getmtime(ruta) < limite:
-            continue
         try:
+            if os.path.getmtime(ruta) < limite:
+                continue
             with open(ruta, encoding="utf-8", errors="replace") as f:
                 contenido = f.read()
         except OSError:
             continue
-        if "Resultado: OK" in contenido and patron.search(contenido):
+        if log_exitoso_para(contenido, fecha_objetivo):
             return ruta
     return None
+
+
+# ──────────────────────────────────────────────
+# MARCA DE ÉXITO: debug/reservas_ok/<fecha>.ok
+# ──────────────────────────────────────────────
+
+SUBDIR_MARCAS = "reservas_ok"
+
+
+def _ruta_marca(directorio_debug, fecha_objetivo):
+    import os
+    return os.path.join(directorio_debug, SUBDIR_MARCAS, f"{fecha_objetivo.isoformat()}.ok")
+
+
+def marcar_exitosa(directorio_debug, fecha_objetivo, estado, ruta_log=None):
+    """
+    Deja constancia de que `fecha_objetivo` quedó resuelta (confirmada o semana
+    libre). Escritura atómica (temporal + os.replace): quien la lea ve el archivo
+    completo o no lo ve, nunca a medias. Devuelve la ruta de la marca.
+    """
+    import os
+    ruta = _ruta_marca(directorio_debug, fecha_objetivo)
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    temporal = f"{ruta}.{os.getpid()}.tmp"
+    with open(temporal, "w", encoding="utf-8") as f:
+        f.write(f"fecha_objetivo={fecha_objetivo.isoformat()}\n")
+        f.write(f"estado={estado}\n")
+        f.write(f"cuando={datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"log={os.path.basename(ruta_log) if ruta_log else ''}\n")
+    os.replace(temporal, ruta)
+    return ruta
+
+
+def marca_exitosa(directorio_debug, fecha_objetivo):
+    """Ruta de la marca de `fecha_objetivo` si existe, o None."""
+    import os
+    ruta = _ruta_marca(directorio_debug, fecha_objetivo)
+    return ruta if os.path.isfile(ruta) else None
+
+
+def ya_resuelta(directorio_debug, fecha_objetivo):
+    """
+    Prueba de que `fecha_objetivo` ya quedó reservada (o era semana libre):
+    primero la marca; si no hay, un log antiguo que lo pruebe (ver
+    `log_exitoso_para`). Devuelve la ruta que lo prueba, o None.
+    """
+    return marca_exitosa(directorio_debug, fecha_objetivo) or \
+        buscar_log_exitoso(directorio_debug, fecha_objetivo)

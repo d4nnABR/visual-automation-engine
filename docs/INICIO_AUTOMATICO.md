@@ -60,10 +60,20 @@ Puede estar **bloqueado por política de TI**.
 
 ### Al encender el PC: `auto_inicio.bat` (solo si falta)
 
-`auto_inicio.bat` ejecuta `main.py reservar_si_falta reserva_csi.txt`: busca en
-`automation_images\debug` un `registro_ejecucion_*.txt` con **"Resultado: OK"**
-para la fecha que toca reservar. Si lo hay, **no se lanza** (lo anota en
+`auto_inicio.bat` ejecuta `main.py reservar_si_falta reserva_csi.txt`. Si la
+fecha que toca reservar **ya quedó resuelta**, no se lanza (lo anota en
 `reserva_bat.log` e `historial_reservas.log`); si no, reserva como `auto.bat`.
+
+Cómo sabe que ya quedó resuelta:
+
+1. **Marca de éxito** `automation_images\debug\reservas_ok\AAAA-MM-DD.ok` (la
+   fecha reservada). La escribe `reservar` solo con la reserva confirmada (texto +
+   check verde) o semana libre, de forma atómica (temporal + renombrar): nadie
+   la ve a medias. Es la prueba principal. Borrar la marca fuerza otro intento.
+2. Respaldo para reservas anteriores a la marca: un `registro_ejecucion_*.txt`
+   leído entero que esté **terminado** (RESUMEN), cuya **última** línea
+   "Resultado:" sea OK, que **solo** mencione esa fecha y que tenga evidencia
+   ("RESERVA CONFIRMADA", "Se ha reservado" o "semana libre").
 
 La fecha que toca sigue la misma regla que `WAIT_UNTIL`: a las 23:58 es la
 reserva de las 00:02 de **mañana**; por la mañana (las 00:02 quedaron atrás) es

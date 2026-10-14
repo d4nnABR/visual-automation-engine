@@ -22,7 +22,7 @@ from .logger import Logger
 from .vision import seleccionar_region, capturar_imagen_referencia
 from .vision_ui import cerrar_obstrucciones, cerrar_aplicacion, encontrar_check_verde
 from .ocr import buscar_texto
-from .reserva import buscar_log_exitoso
+from .reserva import ya_resuelta, marcar_exitosa, calcular_fecha_objetivo, fecha_del_ciclo
 from .acciones import ejecutar_accion, grabar_eventos_teclas_hasta_f12, FALLO, EXITO, FIN
 
 ACCIONES_FLUJO = {"LABEL", "GOTO", "RETRY", "ON_FAIL_GOTO"}
@@ -303,6 +303,7 @@ class AutomatizacionVisual:
 
         marca_tiempo = obtener_marca_tiempo()
         ruta_log = self.logger.abrir(f"registro_ejecucion_{marca_tiempo}.txt")
+        self.ultimo_log = ruta_log
         self.logger.registrar("=" * 60)
         self.logger.registrar("INICIO DE EJECUCIÓN DE AUTOMATIZACIÓN")
         self.logger.registrar(f"Archivo: {nombre_archivo}")
@@ -543,6 +544,16 @@ class AutomatizacionVisual:
         except OSError:
             pass
 
+    def _dejar_marca(self, estado):
+        """Marca de éxito para la fecha que el flujo acaba de resolver (la de hoy:
+        SELECCIONAR_DIA y VERIFICAR_SEMANA la calculan con la fecha actual)."""
+        try:
+            ruta = marcar_exitosa(self.directorio_debug, calcular_fecha_objetivo(),
+                                  estado, getattr(self, "ultimo_log", None))
+            print(f">>> Marca de éxito: {ruta}")
+        except OSError as e:
+            print(f">>> No se pudo escribir la marca de éxito: {e}")
+
     def reservar_con_reintentos(self, nombre_archivo, max_intentos=MAX_INTENTOS_RESERVA):
         """
         Ejecuta el flujo de reserva hasta lograr la confirmación visual, como
@@ -560,6 +571,7 @@ class AutomatizacionVisual:
             print(f"\n>>> {encabezado}: {estado}")
 
             if estado in (CONFIRMADA, SEMANA_LIBRE):
+                self._dejar_marca(estado)
                 return True
             if estado == CANCELADA:
                 print(">>> Cancelado por el usuario: no se reintenta.")
@@ -577,17 +589,16 @@ class AutomatizacionVisual:
         Para el arranque al encender el PC: si ya hay un log exitoso para la
         fecha que toca reservar, no se lanza; si no, reserva con reintentos.
         """
-        from .reserva import fecha_del_ciclo, calcular_fecha_objetivo
         objetivo = calcular_fecha_objetivo(fecha_del_ciclo())
-        log_ok = buscar_log_exitoso(self.directorio_debug, objetivo)
+        log_ok = ya_resuelta(self.directorio_debug, objetivo)
         marca = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if log_ok:
-            print(f"[{marca}] [INFO] Ya hay un log exitoso para {objetivo.isoformat()} "
+            print(f"[{marca}] [INFO] Ya hay una reserva exitosa para {objetivo.isoformat()} "
                   f"({os.path.basename(log_ok)}): no se lanza.")
             self._anotar_historial(nombre_archivo, 0, max_intentos,
                                    f"omitida, ya OK para {objetivo.isoformat()}")
             return True
-        print(f"[{marca}] [INFO] Sin log exitoso para {objetivo.isoformat()}: se lanza la reserva.")
+        print(f"[{marca}] [INFO] Sin reserva exitosa para {objetivo.isoformat()}: se lanza la reserva.")
         return self.reservar_con_reintentos(nombre_archivo, max_intentos)
 
     def _escribir_linea_con_hora(self, archivo_salida, accion, x, y, retraso, hora_siguiente, carga_util):
